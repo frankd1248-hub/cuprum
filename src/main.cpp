@@ -1,0 +1,72 @@
+#include <sysexits.h>
+
+#include "common.h"
+#include "codegen.h"
+#include "error_reporter.h"
+#include "irgen.h"
+#include "lexer.h"
+#include "parser.h"
+#include "semantic.h"
+#include "symbol_table.h"
+
+using namespace std;
+
+string readFile(const string& filename) {
+    ifstream file(filename);
+
+    if (!file.is_open()) {
+        cerr << "Error: Could not open file " << filename << endl;
+        exit(EX_IOERR);
+    }
+
+    ostringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
+}
+
+int main(int argc, char** argv) {
+    if (argc != 2) {
+        cerr << "Usage: unnamed <source_file>" << endl;
+        exit(EX_USAGE);
+    }
+
+    string src = readFile(argv[1]);
+    ErrorReporter err(cerr);
+    Lexer lexer(src, err);
+    vector<Token> tokens = lexer.tokenize();
+
+    // printTokens(cout, tokens);
+    // cout << "\n\n";
+
+    Parser parser(tokens, err);
+    ASTProgram ast = parser.parse();
+    
+    SymbolTable symtab;
+    SemanticAnalyzer sema(symtab, err);
+    sema.analyze(ast);
+
+    IRGen irgen(&symtab);
+    IRProgram ir = irgen.emit(&ast);
+
+    printIRProgram(ir);
+    cout << "\n\n";
+
+    string path = string(argv[1]);
+    path = path.substr(path.find_last_of("/") + 1);
+    path = path.substr(0, path.find_first_of("."));
+    
+    CodeGen codegen(ir);
+    codegen.generate(string("./build/") + path + ".s");
+
+    string assembleInstruction = string("as ./build/") + path + ".s -o ./build/" + path + ".o"; 
+    string linkInstruction = string("ld ./build/") + path + ".o -o " + path;
+    string deleteFiles = string("rm ") + path + ".s " + path + ".o";
+
+    // cout << assembleInstruction << "\n" << linkInstruction << "\n" << deleteFiles << "\n";
+
+    system(assembleInstruction.c_str());
+    system(linkInstruction.c_str());
+    // system(deleteFiles.c_str());
+
+    return EX_OK;
+};
