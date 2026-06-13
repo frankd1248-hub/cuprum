@@ -130,6 +130,8 @@ static ParseRule rules[] = {
     { nullptr,  nullptr, PREC_NONE       }, // TK_FN
     { nullptr,  nullptr, PREC_NONE       }, // TK_IF
     { nullptr,  nullptr, PREC_NONE       }, // TK_ELSE
+    { nullptr,  nullptr, PREC_NONE       }, // TK_FOR
+    { nullptr,  nullptr, PREC_NONE       }, // TK_WHILE 
 };
 
 static Precedence getPrecedence(TokenType type) {
@@ -191,6 +193,31 @@ BlockStmt* Parser::block() {
     return block_;
 }
 
+ForStmt* Parser::forStatement() {
+    ForStmt* stmt = new ForStmt();
+    stmt->start = previous();
+
+    consume(TK_LEFT_PAREN, "Expect '(' after 'for'.");
+
+    if (match(TK_LET)) {
+        stmt->init = letStatement(false);
+    } else {
+        stmt->init = nullptr;
+    }
+    consume(TK_SEMICOLON, "Expect ';' after for initializer.");
+
+    if (!check(TK_SEMICOLON))
+        stmt->condition = expression(PREC_NONE);
+    consume(TK_SEMICOLON, "Expect ';' after for condition.");
+
+    if (!check(TK_RIGHT_PAREN))
+        stmt->increment = expression(PREC_NONE);
+
+    consume(TK_RIGHT_PAREN, "Expect ')' after for clauses.");
+    stmt->body = statement();
+    return stmt;
+}
+
 FuncDecl* Parser::fnDeclaration() {
     FuncDecl* fun = new FuncDecl();
 
@@ -230,7 +257,7 @@ IfStmt* Parser::ifStatement() {
     return stmt;
 }
 
-LetStmt* Parser::letStatement() {
+LetStmt* Parser::letStatement(bool consumeSemicolon) {
     LetStmt* stmt = new LetStmt();
 
     do {
@@ -250,7 +277,8 @@ LetStmt* Parser::letStatement() {
         stmt->declarators.push_back(decl);
     } while (match(TK_COMMA));
 
-    consume(TK_SEMICOLON, "Expect ';' after let statement.");
+    if (consumeSemicolon)
+        consume(TK_SEMICOLON, "Expect ';' after let statement.");
     return stmt;
 }
 
@@ -263,13 +291,27 @@ ReturnStmt* Parser::returnStatement() {
     return stmt;
 }
 
+WhileStmt* Parser::whileStatement() {
+    WhileStmt* stmt = new WhileStmt();
+    stmt->start = previous();
+
+    consume(TK_LEFT_PAREN, "Expect '(' after 'while'.");
+    stmt->condition = expression(PREC_NONE);
+    consume(TK_RIGHT_PAREN, "Expect ')' after condition.");
+
+    stmt->body = statement();
+    return stmt;
+}
+
 Stmt* Parser::statement() {
     if (isAtEnd()) return nullptr;
     if (check(TK_RIGHT_BRACE)) return nullptr;
 
+    if (match(TK_FOR))          return forStatement();
     if (match(TK_IF))           return ifStatement();
     if (match(TK_LET))          return letStatement();
     if (match(TK_RETURN))       return returnStatement();
+    if (match(TK_WHILE))        return whileStatement();
     if (match(TK_LEFT_BRACE))   return block();
 
     Expr* expr = expression(PREC_NONE);

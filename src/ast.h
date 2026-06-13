@@ -31,12 +31,15 @@ class CastExpr;
 class LiteralExpr;
 class UnaryExpr;
 class VarExpr;
+
 class BlockStmt;
 class ExprStmt;
+class ForStmt;
 class FuncDecl;
 class IfStmt;
 class LetStmt;
 class ReturnStmt;
+class WhileStmt;
 
 class ASTVisitor {
 public:
@@ -47,12 +50,15 @@ public:
     virtual void visit(LiteralExpr&) = 0;
     virtual void visit(UnaryExpr&)   = 0;
     virtual void visit(VarExpr&)     = 0;
+
     virtual void visit(BlockStmt&)   = 0;
     virtual void visit(ExprStmt&)    = 0;
+    virtual void visit(ForStmt&)     = 0;
     virtual void visit(FuncDecl&)    = 0;
     virtual void visit(IfStmt&)      = 0;
     virtual void visit(LetStmt&)     = 0;
     virtual void visit(ReturnStmt&)  = 0;
+    virtual void visit(WhileStmt&)   = 0;
 };
 
 class ASTNode {
@@ -156,14 +162,27 @@ struct VarDeclarator {
     Expr*   init;
 };
 
+class ForStmt : public Stmt {
+public:
+    void accept(class ASTVisitor& visitor) override {
+        visitor.visit(*this);
+    }
+
+    Token    start; // For error messages
+    LetStmt* init;
+    Expr*    condition;
+    Expr*    increment;
+    Stmt*    body;
+};
+
 class FuncDecl : public Stmt {
 public:
     void accept(class ASTVisitor& visitor) override {
         visitor.visit(*this);
     }
 
-    Type returnType;
-    Token name;
+    Type       returnType;
+    Token      name;
     BlockStmt* body;
 };
 
@@ -195,6 +214,17 @@ public:
     }
 
     Expr* expr;
+};
+
+class WhileStmt : public Stmt {
+public:
+    void accept(class ASTVisitor& visitor) override {
+        visitor.visit(*this);
+    }
+
+    Token start;
+    Expr* condition;
+    Stmt* body;
 };
 
 struct ASTProgram {

@@ -13,15 +13,16 @@ public:
 
     void visit(BlockStmt&)   override;
     void visit(ExprStmt&)    override;
+    void visit(ForStmt&)     override;
     void visit(FuncDecl&)    override;
     void visit(IfStmt&)      override;
     void visit(LetStmt&)     override;
     void visit(ReturnStmt&)  override;
+    void visit(WhileStmt&)   override;
 
     void visit(AssignExpr&)  override;
     void visit(BinaryExpr&)  override;
     void visit(CastExpr&)    override;
-    
     void visit(LiteralExpr&) override;
     void visit(UnaryExpr&)   override;
     void visit(VarExpr&)     override;

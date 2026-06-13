@@ -14,10 +14,12 @@ public:
 
     void visit(BlockStmt& node)   override;
     void visit(ExprStmt& node)    override;
+    void visit(ForStmt& node)     override;
     void visit(FuncDecl& node)    override;
     void visit(IfStmt& node)      override;
     void visit(LetStmt& node)     override;
     void visit(ReturnStmt& node)  override;
+    void visit(WhileStmt& node)   override;
 
     void visit(AssignExpr& node)  override;
     void visit(BinaryExpr& node)  override;
@@ -27,7 +29,7 @@ public:
     void visit(VarExpr& node)     override;
 
 private:
-    SymbolTable&  symbols;
+    SymbolTable&   symbols;
     ErrorReporter& err;
     Type currentReturnType = Type::Voidt; // set when entering a FuncDecl, checked in ReturnStmt
     int functionLinestart;

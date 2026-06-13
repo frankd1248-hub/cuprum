@@ -16,6 +16,30 @@ void SemanticAnalyzer::visit(BlockStmt& block) {
     symbols.popScope();
 }
 
+void SemanticAnalyzer::visit(ExprStmt& expr) {
+    expr.expression->accept(*this);
+}
+
+void SemanticAnalyzer::visit(ForStmt& stmt) {
+    symbols.pushScope();
+
+    if (stmt.init)
+        stmt.init->accept(*this);   // defines i in the new scope
+
+    if (stmt.condition) {
+        stmt.condition->accept(*this);
+        if (stmt.condition->resolvedType != Type::Boolt)
+            err.report(stmt.start, "For condition must be bool.");
+    }
+
+    if (stmt.increment)
+        stmt.increment->accept(*this);
+
+    stmt.body->accept(*this);
+
+    symbols.popScope();
+}
+
 void SemanticAnalyzer::visit(FuncDecl& fn) {
     symbols.define({
         fn.name.lexeme, 
@@ -74,8 +98,11 @@ void SemanticAnalyzer::visit(ReturnStmt& ret) {
     }
 }
 
-void SemanticAnalyzer::visit(ExprStmt& expr) {
-    expr.expression->accept(*this);
+void SemanticAnalyzer::visit(WhileStmt& stmt) {
+    stmt.condition->accept(*this);
+    if (stmt.condition->resolvedType != Type::Boolt)
+        err.report(stmt.start, "While condition must be bool.");
+    stmt.body->accept(*this);
 }
 
 void SemanticAnalyzer::visit(AssignExpr& expr) {

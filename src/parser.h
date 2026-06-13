@@ -96,10 +96,12 @@ private:
     Expr* last = nullptr;
 
     BlockStmt*  block();
+    ForStmt*    forStatement();
     FuncDecl*   fnDeclaration();
     IfStmt*     ifStatement();
-    LetStmt*    letStatement();
+    LetStmt*    letStatement(bool consumeSemicolon = true);
     ReturnStmt* returnStatement();
+    WhileStmt*  whileStatement();
 
 };
 

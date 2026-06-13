@@ -5,6 +5,7 @@
 #include "error_reporter.h"
 #include "irgen.h"
 #include "lexer.h"
+#include "optimizer.h"
 #include "parser.h"
 #include "semantic.h"
 #include "symbol_table.h"
@@ -47,6 +48,9 @@ int main(int argc, char** argv) {
 
     IRGen irgen(&symtab);
     IRProgram ir = irgen.emit(&ast);
+
+    Optimizer optimizer(ir);
+    optimizer.optimize();
 
     printIRProgram(ir);
     cout << "\n\n";

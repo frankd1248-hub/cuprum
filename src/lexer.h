@@ -71,12 +71,14 @@ private:
         else if (lexeme == "f32")    return TK_F32;
         else if (lexeme == "false")  return TK_FALSE;
         else if (lexeme == "fn")     return TK_FN;
+        else if (lexeme == "for")    return TK_FOR;
         else if (lexeme == "i32")    return TK_I32;
         else if (lexeme == "if")     return TK_IF;
         else if (lexeme == "let")    return TK_LET;
         else if (lexeme == "return") return TK_RETURN;
         else if (lexeme == "true")   return TK_TRUE;
         else if (lexeme == "void")   return TK_VOID;
+        else if (lexeme == "while")  return TK_WHILE;
 
         return TK_IDENTIFIER;
     }

@@ -29,6 +29,44 @@ void IRGen::visit(ExprStmt& stmt) {
     stmt.expression->accept(*this);
 }
 
+/**
+ * IR Structure;
+ * 
+ * [init]
+ * label cond:
+ *     [condition] -> t0
+ *     jnz t0, body
+ *     jmp end
+ * label body:
+ *     [body]
+ *     [increment]
+ *     jmp cond
+ * label end:
+ */
+void IRGen::visit(ForStmt& stmt) {
+    std::string condLabel = newLabel("cond");
+    std::string bodyLabel = newLabel("body");
+    std::string endLabel  = newLabel("end");
+
+    if (stmt.init) stmt.init->accept(*this);
+
+    emit({ IROp::Label, {}, {}, {}, condLabel });
+
+    if (stmt.condition) {
+        stmt.condition->accept(*this);
+        emit({ IROp::JumpIf, {}, lastValue, {}, bodyLabel });
+        emit({ IROp::Jump,   {}, {}, {},         endLabel  });
+    }
+
+    emit({ IROp::Label, {}, {}, {}, bodyLabel });
+    stmt.body->accept(*this);
+
+    if (stmt.increment) stmt.increment->accept(*this);
+    emit({ IROp::Jump, {}, {}, {}, condLabel });
+
+    emit({ IROp::Label, {}, {}, {}, endLabel });
+}
+
 void IRGen::visit(FuncDecl& fun) {
     currentFunc = {};
     currentFunc.name       = fun.name.lexeme;
@@ -85,6 +123,36 @@ void IRGen::visit(ReturnStmt& ret) {
         lastValue,
         IRValue {}
     });
+}
+
+/**
+ * IR Structure:
+ * 
+ * label cond:
+ *     [condition] -> t0
+ *     jnz t0, body
+ *     jmp end
+ * label body:
+ *     [body]
+ *     jmp cond
+ * label end:
+ */
+void IRGen::visit(WhileStmt& stmt) {
+    std::string condLabel = newLabel("cond");
+    std::string bodyLabel = newLabel("body");
+    std::string endLabel  = newLabel("end");
+
+    emit({ IROp::Label, {}, {}, {}, condLabel });
+
+    stmt.condition->accept(*this);
+    emit({ IROp::JumpIf, {}, lastValue, {}, bodyLabel });
+    emit({ IROp::Jump,   {}, {}, {},         endLabel  });
+
+    emit({ IROp::Label, {}, {}, {}, bodyLabel });
+    stmt.body->accept(*this);
+    emit({ IROp::Jump,  {}, {}, {}, condLabel });
+
+    emit({ IROp::Label, {}, {}, {}, endLabel });
 }
 
 void IRGen::visit(AssignExpr& expr) {
