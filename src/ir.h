@@ -5,14 +5,25 @@
 #include "ast.h"
 
 struct IRValue {
-    enum class Kind { Temp, Constant } kind;
-    int id;       // temp number (t0, t1, ...) if Kind::Temp
-    int constant; // literal value if Kind::Constant
+    enum class Kind { Temp, IntConst, FloatConst } kind;
+    int   id;       // temp id when Kind::Temp
+    union {
+        int   ival; // when Kind::IntConst
+        float fval; // when Kind::FloatConst
+    };
 };
 
 enum class IROp {
     Const,   // dest = constant
-    Add, Sub, Mul, Div,  // dest = left op right
+    FConst,  // dest = float constant (uses src1.fval)
+    Add, 
+    Sub, 
+    Mul, 
+    Div,     // dest = left op right
+    FAdd, 
+    FSub, 
+    FMul, 
+    FDiv,
     Ret,     // return src
     Label,   // label definition (dest holds label id)
     Jump,    // unconditional jump to label
@@ -23,12 +34,14 @@ enum class IROp {
     Less, 
     Leq, 
     Gret, 
-    Geq,    // comparison; result is 0 or 1
+    Geq,     // comparison; result is 0 or 1
     Not, 
-    Store,  // store src1 into the slot named by label (the variable name)
-    Load,   // dest = value of variable named by label
-    Mov,    // dest = src1 (copy)
-    ToBool, // dest = (src1 != 0) ? 1 : 0
+    Store,   // store src1 into the slot named by label (the variable name)
+    Load,    // dest = value of variable named by label
+    Mov,     // dest = src1 (copy)
+    ToFloat, // dest = (f32) src1  — i32 → f32 conversion
+    ToInt,   // dest = (i32) src1  — f32 → i32 conversion (truncates)
+    ToBool,  // already exists — reuse for f32 → bool (fval != 0.0)
 };
 
 struct IRInstruction {
@@ -58,27 +71,34 @@ inline static void printIndents(int amount) {
 
 inline std::string getOpString(IROp op) {
     switch (op) {
-        case IROp::Const:  return "const";
-        case IROp::Add:    return "add";
-        case IROp::Sub:    return "sub";
-        case IROp::Mul:    return "mul";
-        case IROp::Div:    return "div";
-        case IROp::Ret:    return "ret";
-        case IROp::Label:  return "label";
-        case IROp::Jump:   return "jmp";
-        case IROp::JumpIf: return "jnz";
-        case IROp::Call:   return "call";
-        case IROp::Eq:     return "eq";
-        case IROp::Neq:    return "neq";
-        case IROp::Less:   return "less";
-        case IROp::Leq:    return "leq";
-        case IROp::Gret:   return "gret";
-        case IROp::Geq:    return "geq";
-        case IROp::Not:    return "not";
-        case IROp::Store:  return "sto";
-        case IROp::Load:   return "lod";
-        case IROp::Mov:    return "mov";
-        case IROp::ToBool: return "bool";
+        case IROp::Const:   return "const";
+        case IROp::FConst:  return "constf";
+        case IROp::Add:     return "add";
+        case IROp::Sub:     return "sub";
+        case IROp::Mul:     return "mul";
+        case IROp::Div:     return "div";
+        case IROp::FAdd:    return "addf";
+        case IROp::FSub:    return "subf";
+        case IROp::FMul:    return "mulf";
+        case IROp::FDiv:    return "divf";
+        case IROp::Ret:     return "ret";
+        case IROp::Label:   return "label";
+        case IROp::Jump:    return "jmp";
+        case IROp::JumpIf:  return "jnz";
+        case IROp::Call:    return "call";
+        case IROp::Eq:      return "eq";
+        case IROp::Neq:     return "neq";
+        case IROp::Less:    return "less";
+        case IROp::Leq:     return "leq";
+        case IROp::Gret:    return "gret";
+        case IROp::Geq:     return "geq";
+        case IROp::Not:     return "not";
+        case IROp::Store:   return "sto";
+        case IROp::Load:    return "lod";
+        case IROp::Mov:     return "mov";
+        case IROp::ToFloat: return "float";
+        case IROp::ToInt:   return "int";
+        case IROp::ToBool:  return "bool";
         default: return "nop";
     }
 }
@@ -86,8 +106,10 @@ inline std::string getOpString(IROp op) {
 inline static std::string stringIRValue(IRValue val) {
     if (val.kind == IRValue::Kind::Temp)
         return "t" + std::to_string(val.id);
-    if (val.kind == IRValue::Kind::Constant)
-        return std::to_string(val.constant);
+    if (val.kind == IRValue::Kind::IntConst)
+        return std::to_string(val.ival);
+    if (val.kind == IRValue::Kind::FloatConst)
+        return std::to_string(val.fval);
     return "?"; // fallback
 }
 
@@ -109,6 +131,10 @@ inline void printIRProgram(const IRProgram& program) {
                 case IROp::Sub:
                 case IROp::Mul:
                 case IROp::Div:
+                case IROp::FAdd:
+                case IROp::FSub:
+                case IROp::FMul:
+                case IROp::FDiv:
                 case IROp::Eq:
                 case IROp::Neq:
                 case IROp::Less:
@@ -130,6 +156,7 @@ inline void printIRProgram(const IRProgram& program) {
                 case IROp::Call: break;
                 case IROp::Ret: printf("%s", stringIRValue(inst.src1).c_str()); break;
                 case IROp::Const:
+                case IROp::FConst:
                     printf("%s, %s",
                         stringIRValue(inst.dest).c_str(),
                         stringIRValue(inst.src1).c_str());
@@ -146,6 +173,8 @@ inline void printIRProgram(const IRProgram& program) {
                         stringIRValue(inst.src1).c_str());
                     break;
                 case IROp::ToBool:
+                case IROp::ToFloat:
+                case IROp::ToInt:
                     printf("%s <- %s", 
                         stringIRValue(inst.dest).c_str(),
                         stringIRValue(inst.src1).c_str());

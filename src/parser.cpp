@@ -42,27 +42,33 @@ static Expr* boolLit(Parser& parser, bool canAssign) {
     return literal;
 }
 
-static Expr* lparen(Parser& p, bool canAssign) {
-    TokenType next = p.peek().type;
+static Expr* floatLit(Parser& parser, bool canAssign) {
+    LiteralExpr* literal = new LiteralExpr();
+    literal->value = std::stof(parser.previous().lexeme);
+    return literal;
+}
 
-    if (next == TK_I32 || next == TK_BOOL || next == TK_VOID) {
-        if (p.peekNext().type == TK_RIGHT_PAREN) {
+static Expr* lparen(Parser& parser, bool canAssign) {
+    TokenType next = parser.peek().type;
+
+    if (next == TK_I32 || next == TK_F32 || next == TK_BOOL || next == TK_VOID) {
+        if (parser.peekNext().type == TK_RIGHT_PAREN) {
             // it's a cast
-            p.advance();
-            Type target = p.parseTypeKeyword_prev();  // get Type from previous token
-            p.consume(TK_RIGHT_PAREN, "Expect ')' after cast type.");
+            parser.advance();
+            Type target = parser.parseTypeKeyword_prev();
+            parser.consume(TK_RIGHT_PAREN, "Expect ')' after cast type.");
 
             auto* cast = new CastExpr();
-            cast->token      = p.previous();
+            cast->token      = parser.previous();
             cast->targetType = target;
-            cast->expr       = p.expression(PREC_UNARY);
+            cast->expr       = parser.expression(PREC_UNARY);
             return cast;
         }
     }
 
     // otherwise it's a grouped expression
-    Expr* inner = p.expression(PREC_NONE);
-    p.consume(TK_RIGHT_PAREN, "Expect ')' after expression.");
+    Expr* inner = parser.expression(PREC_NONE);
+    parser.consume(TK_RIGHT_PAREN, "Expect ')' after expression.");
     return inner;
 }
 
@@ -110,7 +116,9 @@ static ParseRule rules[] = {
     { nullptr,  binary,  PREC_COMPARISON }, // TK_GREATER_EQUAL
     { unary,    nullptr, PREC_NONE       }, // TK_BANG
     { number,   nullptr, PREC_NONE       }, // TK_NUMBER
+    { floatLit, nullptr, PREC_NONE       }, // TK_FLOAT
     { nullptr,  nullptr, PREC_NONE       }, // TK_I32
+    { nullptr,  nullptr, PREC_NONE       }, // TK_F32
     { nullptr,  nullptr, PREC_NONE       }, // TK_VOID
     { nullptr,  nullptr, PREC_NONE       }, // TK_BOOL
     { boolLit,  nullptr, PREC_NONE       }, // TK_TRUE
@@ -153,15 +161,22 @@ Expr* Parser::expression(Precedence precedence) {
 }
 
 Type Parser::parseTypeKeyword() {
-    if (match(TK_BOOL)) {
-        return Type::Boolt;
-    } else if (match(TK_I32)) {
-        return Type::Int32t;
-    } else if (match(TK_VOID)) {
-        return Type::Voidt;
-    }
+    if (match(TK_BOOL))      return Type::Boolt;
+    else if (match(TK_I32))  return Type::Int32t;
+    else if (match(TK_F32))  return Type::Float32t;
+    else if (match(TK_VOID)) return Type::Voidt;
 
     return Type::Nullt;
+}
+
+Type Parser::parseTypeKeyword_prev() {
+    switch (previous().type) {
+        case TK_BOOL: return Type::Boolt;
+        case TK_I32:  return Type::Int32t;
+        case TK_F32:  return Type::Float32t;
+        case TK_VOID: return Type::Voidt;
+        default:      return Type::Nullt;
+    }
 }
 
 BlockStmt* Parser::block() {
@@ -276,13 +291,4 @@ ASTProgram Parser::parse() {
 
     program.mainFunction = main;
     return program;
-}
-
-Type Parser::parseTypeKeyword_prev() {
-    switch (previous().type) {
-        case TK_I32:  return Type::Int32t;
-        case TK_BOOL: return Type::Boolt;
-        case TK_VOID: return Type::Voidt;
-        default:      return Type::Nullt;
-    }
 }

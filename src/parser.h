@@ -32,8 +32,6 @@ public:
 
     ASTProgram parse();
 
-    static void number(bool);
-
     Token peek() const {
         if (current >= (int) tokens.size()) return { TK_EOF, "", 0, 0 };
         return tokens[current];

@@ -9,16 +9,18 @@
 enum class Type {
     Boolt,
     Int32t,
+    Float32t,
     Voidt,
     Nullt,
 };
 
 inline std::string TypetoString(Type t) {
     switch(t) {
-        case Type::Boolt:  return "bool";
-        case Type::Int32t: return "i32";
-        case Type::Voidt:  return "void";
-        case Type::Nullt:  return "null";
+        case Type::Boolt:    return "bool";
+        case Type::Int32t:   return "i32";
+        case Type::Float32t: return "f32";
+        case Type::Voidt:    return "void";
+        case Type::Nullt:    return "null";
         default: return "?";
     }
 }
@@ -103,7 +105,7 @@ public:
         visitor.visit(*this);
     }
 
-    std::variant<int32_t, bool> value;
+    std::variant<int32_t, _Float32, bool> value;
 };
 
 class UnaryExpr : public Expr {

@@ -102,20 +102,32 @@ void SemanticAnalyzer::visit(BinaryExpr& bin) {
     Type R = bin.right->resolvedType;
 
     switch (bin.op.type) {
-        case TK_PLUS: case TK_MINUS: case TK_STAR: case TK_SLASH:
-            if (L != Type::Int32t || R != Type::Int32t)
-                err.report(bin.op, "Arithmetic operands must be i32.");
-            bin.resolvedType = Type::Int32t;
+        case TK_PLUS: 
+        case TK_MINUS: 
+        case TK_STAR: 
+        case TK_SLASH:
+            if (L == Type::Float32t || R == Type::Float32t) {
+                if (L != Type::Float32t || R != Type::Float32t)
+                    err.report(bin.op, "Mixed i32/f32 arithmetic requires an explicit cast.");
+                bin.resolvedType = Type::Float32t;
+            } else if (L == Type::Int32t && R == Type::Int32t) {
+                bin.resolvedType = Type::Int32t;
+            } else {
+                err.report(bin.op, "Arithmetic operands must be i32 or f32.");
+            }
             break;
 
-        case TK_EQUAL_EQUAL: case TK_BANG_EQUAL:
+        case TK_EQUAL_EQUAL: 
+        case TK_BANG_EQUAL:
             if (L != R)
                 err.report(bin.op, "Operands must have the same type.");
             bin.resolvedType = Type::Boolt;
             break;
 
-        case TK_LESS: case TK_LESS_EQUAL:
-        case TK_GREATER: case TK_GREATER_EQUAL:
+        case TK_LESS: 
+        case TK_LESS_EQUAL:
+        case TK_GREATER: 
+        case TK_GREATER_EQUAL:
             if (L != Type::Int32t || R != Type::Int32t)
                 err.report(bin.op, "Relational operands must be i32.");
             bin.resolvedType = Type::Boolt;
@@ -128,8 +140,12 @@ static bool isCastCompatible(Type from, Type to) {
 
     // From A to B
     static const std::pair<Type,Type> allowed[] = {
-        { Type::Int32t, Type::Boolt  },
-        { Type::Boolt,  Type::Int32t },
+        { Type::Int32t,   Type::Boolt  },
+        { Type::Boolt,    Type::Int32t },
+        { Type::Int32t,   Type::Float32t },
+        { Type::Float32t, Type::Int32t   },
+        { Type::Float32t, Type::Boolt    },
+        { Type::Boolt,    Type::Float32t },
     };
 
     for (auto& [f, t] : allowed)
@@ -155,11 +171,12 @@ void SemanticAnalyzer::visit(CastExpr& cast) {
 }
 
 void SemanticAnalyzer::visit(LiteralExpr& lit) {
-    if (std::holds_alternative<int32_t>(lit.value)) {
+    if (std::holds_alternative<int32_t>(lit.value))
         lit.resolvedType = Type::Int32t;
-    } else if (std::holds_alternative<bool>(lit.value)) {
+    else if (std::holds_alternative<bool>(lit.value))
         lit.resolvedType = Type::Boolt;
-    }
+    else
+        lit.resolvedType = Type::Float32t;
 }
 
 void SemanticAnalyzer::visit(UnaryExpr& unary) {

@@ -68,6 +68,7 @@ private:
         if      (lexeme == "bool")   return TK_BOOL;
         else if (lexeme == "const")  return TK_CONST;
         else if (lexeme == "else")   return TK_ELSE;
+        else if (lexeme == "f32")    return TK_F32;
         else if (lexeme == "false")  return TK_FALSE;
         else if (lexeme == "fn")     return TK_FN;
         else if (lexeme == "i32")    return TK_I32;

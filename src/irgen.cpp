@@ -105,11 +105,13 @@ void IRGen::visit(BinaryExpr& bin) {
 
     IROp op;
 
+    bool isFloat = bin.resolvedType == Type::Float32t;
+
     switch (bin.op.type) {
-        case TK_MINUS: op = IROp::Sub; break;
-        case TK_PLUS:  op = IROp::Add; break;
-        case TK_STAR:  op = IROp::Mul; break;
-        case TK_SLASH: op = IROp::Div; break;
+        case TK_PLUS:  op = (isFloat ? IROp::FAdd : IROp::Add); break;
+        case TK_MINUS: op = (isFloat ? IROp::FSub : IROp::Sub); break;
+        case TK_STAR:  op = (isFloat ? IROp::FMul : IROp::Mul); break;
+        case TK_SLASH: op = (isFloat ? IROp::FDiv : IROp::Div); break;
         case TK_EQUAL_EQUAL:   op = IROp::Eq; break;
         case TK_BANG_EQUAL:    op = IROp::Neq; break;
         case TK_LESS:          op = IROp::Less; break;
@@ -125,28 +127,43 @@ void IRGen::visit(BinaryExpr& bin) {
 void IRGen::visit(CastExpr& cast) {
     cast.expr->accept(*this);
 
-    if (cast.targetType == Type::Boolt &&
-        cast.expr->resolvedType == Type::Int32t) {
+    Type from = cast.expr->resolvedType;
+    Type to   = cast.targetType;
 
-        IRValue dest = newTemp();
-        emit(IRInstruction { IROp::ToBool, dest, lastValue, {} });
-        lastValue = dest;
-    }
+    if (from == to) return;
 
-    // Otherwise conversion is not needed
+    IRValue dest = newTemp();
+    IROp op;
+
+    if (to == Type::Boolt)    op = IROp::ToBool;
+    else if (to == Type::Float32t) op = IROp::ToFloat;
+    else if (to == Type::Int32t)   op = IROp::ToInt;
+
+    emit(IRInstruction { op, dest, lastValue, {} });
+    lastValue = dest;
 }
 
 void IRGen::visit(LiteralExpr& lit) {
     IRValue dest = newTemp();
-    emit(IRInstruction {
-        IROp::Const,
-        dest,
-        IRValue { IRValue::Kind::Constant, -1, 
-            std::holds_alternative<int32_t>(lit.value) ? 
-                std::get<int32_t>(lit.value) : (int) std::get<bool>(lit.value) },
-        IRValue {}, ""
-    });
-    
+
+    if (std::holds_alternative<_Float32>(lit.value)) {
+        float fval = std::get<_Float32>(lit.value);
+        emit(IRInstruction {
+            IROp::FConst, dest,
+            IRValue { .kind=IRValue::Kind::FloatConst, .id=-1, .fval=fval },
+            {}
+        });
+    } else {
+        int ival = std::holds_alternative<int32_t>(lit.value)
+            ? std::get<int32_t>(lit.value)
+            : (int) std::get<bool>(lit.value);
+        emit(IRInstruction {
+            IROp::Const, dest,
+            IRValue { .kind=IRValue::Kind::IntConst, .id=-1, .ival = ival },
+            {}
+        });
+    }
+
     lastValue = dest;
 }
 
@@ -162,10 +179,13 @@ void IRGen::visit(UnaryExpr& unary) {
         case TK_BANG:  op = IROp::Not; break;
     }
 
+    bool isFloat = unary.resolvedType == Type::Float32t;
+
     emit(IRInstruction {
         op,
         dest,
-        IRValue { IRValue::Kind::Constant, -1, 0 },
+        isFloat ? IRValue { .kind=IRValue::Kind::FloatConst, .id=-1, .fval=0.0f, } : 
+                  IRValue { .kind=IRValue::Kind::IntConst,   .id=-1, .ival=0 },
         right, ""
     });
     lastValue = dest;

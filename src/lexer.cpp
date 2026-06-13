@@ -19,8 +19,13 @@ std::vector<Token> Lexer::tokenize() {
             addToken(identifierType(lexeme), lexeme);
         } else if (isDigit(c)) {
             while (isDigit(peek())) advance();
-            std::string lexeme = src.substr(start, current - start);
-            addToken(TK_NUMBER, lexeme);
+            if (peek() == '.' && isDigit(peekNext())) {
+                advance(); // consume '.'
+                while (isDigit(peek())) advance();
+                addToken(TK_FLOAT, src.substr(start, current - start));
+            } else {
+                addToken(TK_NUMBER, src.substr(start, current - start));
+            }
         } else {
             switch (c) {
                 case '(': addToken(TK_LEFT_PAREN, "("); break;

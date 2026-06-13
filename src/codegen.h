@@ -51,41 +51,44 @@ public:
 
 private:
     IRProgram& program_;
+    const IRFunction* currentFunc;
     std::ofstream out_;
     StackFrame frame_;
 
-    // File-level preamble: .intel_syntax + _start stub
+    std::unordered_map<float, std::string> floatLabels;
+
     void emitPreamble();
 
-    // Lowers one IRFunction.
     void emitFunction(const IRFunction& fn);
 
-    // push rbp / mov rbp, rsp / sub rsp, N
     void emitPrologue(int frameSize);
 
-    // mov rsp, rbp / pop rbp / ret
     void emitEpilogue();
 
     // Dispatches a single instruction.
     void emitInstruction(const IRInstruction& instr);
 
-    void emitConst (const IRInstruction& instr); // dest = constant
-    void emitCmp   (const IRInstruction& instr, const std::string& setcc);
-    void emitNot   (const IRInstruction& instr);
-    void emitRet   (const IRInstruction& instr); // return src1
-    void emitBinop (const IRInstruction& instr); // dest = src1 op src2
+    void emitConst  (const IRInstruction& instr); // dest = constant
+    void emitFConst (const IRInstruction& instr);
+    void emitCmp    (const IRInstruction& instr, const std::string& setcc);
+    void emitNot    (const IRInstruction& instr);
+    void emitRet    (const IRInstruction& instr); // return src1
+    void emitBinop  (const IRInstruction& instr); // dest = src1 op src2
+    void emitFBinop (const IRInstruction& instr);
+    void emitToFloat(const IRInstruction& instr);
+    void emitToInt  (const IRInstruction& instr);
 
-    // "QWORD PTR [rbp-N]" for a temp id.
-    std::string stackRef(int tempId) const;
+    std::string stackRef (int tempId) const;
+    std::string fStackRef(int tempId) const;
 
-    // Resolves an IRValue to either a stack ref or an immediate string.
     std::string resolve(const IRValue& val) const;
 
-    // Emits a line with a leading tab.
     void emit(const std::string& line);
 
-    // Emits a label (no leading tab).
     void emitLabel(const std::string& label);
+
+    std::string floatLabel(float fval);
+    void emitFloatPool();
 };
 
 #endif
