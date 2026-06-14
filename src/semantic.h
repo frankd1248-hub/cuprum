@@ -1,5 +1,5 @@
-#ifndef ferrum_semantic_h
-#define ferrum_semantic_h
+#ifndef cuprum_semantic_h
+#define cuprum_semantic_h
 
 #include "common.h"
 #include "ast.h"
@@ -23,6 +23,7 @@ public:
 
     void visit(AssignExpr& node)  override;
     void visit(BinaryExpr& node)  override;
+    void visit(CallExpr& node)    override;
     void visit(CastExpr& node)    override;
     void visit(LiteralExpr& node) override;
     void visit(UnaryExpr& node)   override;

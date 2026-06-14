@@ -1,5 +1,5 @@
-#ifndef ferrum_ir_h
-#define ferrum_ir_h
+#ifndef cuprum_ir_h
+#define cuprum_ir_h
 
 #include "common.h"
 #include "ast.h"
@@ -7,6 +7,7 @@
 struct IRValue {
     enum class Kind { Temp, IntConst, FloatConst } kind;
     int   id;       // temp id when Kind::Temp
+    Type  type = Type::Nullt;
     union {
         int   ival; // when Kind::IntConst
         float fval; // when Kind::FloatConst
@@ -29,6 +30,7 @@ enum class IROp {
     Jump,    // unconditional jump to label
     JumpIf,  // conditional jump: if src != 0, jump to label
     Call,    // dest = call fn(args...)
+    Param,   // dest = param N (index stored in src1.ival)
     Eq, 
     Neq, 
     Less, 
@@ -49,14 +51,20 @@ struct IRInstruction {
     IRValue  dest;
     IRValue  src1;
     IRValue  src2;
-    std::string label; // for Label / Jump / Call ops
+    std::string          label;  // function name for Call, label name for jumps
+    std::vector<IRValue> args;   // for Call only
+};
+
+struct IRParam {
+    std::string name;
+    Type        type;
 };
 
 struct IRFunction {
-    std::string name;
-    Type        returnType;
-    std::vector<std::string>    params; // param names in order
-    std::vector<IRInstruction>  body;
+    std::string          name;
+    Type                 returnType;
+    std::vector<IRParam> params;
+    std::vector<IRInstruction> body;
 };
 
 struct IRProgram {
@@ -86,6 +94,7 @@ inline std::string getOpString(IROp op) {
         case IROp::Jump:    return "jmp";
         case IROp::JumpIf:  return "jnz";
         case IROp::Call:    return "call";
+        case IROp::Param:   return "param";
         case IROp::Eq:      return "eq";
         case IROp::Neq:     return "neq";
         case IROp::Less:    return "less";
@@ -118,7 +127,7 @@ inline void printIRProgram(const IRProgram& program) {
 
     for (const IRFunction& func : program.functions) {
         printIndents(indents);
-        printf("function %s() => %s {\n", func.name.c_str(), TypetoString(func.returnType).c_str());
+        printf("\nfunction %s() => %s {\n", func.name.c_str(), TypetoString(func.returnType).c_str());
         indents++;
 
         for (const IRInstruction& inst : func.body) {
@@ -153,7 +162,17 @@ inline void printIRProgram(const IRProgram& program) {
                     printf("%s != 0 ? => %s", 
                         stringIRValue(inst.src1).c_str(), inst.label.c_str());
                     break;
-                case IROp::Call: break;
+                case IROp::Call:
+                    printf("%s <- %s(", stringIRValue(inst.dest).c_str(), inst.label.c_str());
+                    for (size_t i = 0; i < inst.args.size(); i++) {
+                        printf("%s", stringIRValue(inst.args[i]).c_str());
+                        if (i + 1 < inst.args.size()) printf(", ");
+                    }
+                    printf(")");
+                    break;
+                case IROp::Param:
+                    printf("%s <- params[%d]", stringIRValue(inst.dest).c_str(),
+                        inst.src1.ival); break;
                 case IROp::Ret: printf("%s", stringIRValue(inst.src1).c_str()); break;
                 case IROp::Const:
                 case IROp::FConst:

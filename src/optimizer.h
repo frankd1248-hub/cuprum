@@ -1,5 +1,5 @@
-#ifndef ferrum_optimizer_h
-#define ferrum_optimizer_h
+#ifndef cuprum_optimizer_h
+#define cuprum_optimizer_h
 
 #include <vector>
 #include "ir.h"

@@ -1,5 +1,5 @@
-#ifndef ferrum_codegen_h
-#define ferrum_codegen_h
+#ifndef cuprum_codegen_h
+#define cuprum_codegen_h
 
 #include <fstream>
 #include <unordered_map>
@@ -32,6 +32,10 @@ public:
         return (size + 15) & ~15;   // round up to nearest 16
     }
 
+    bool hasSlot(int tempId) const {
+        return offsets.count(tempId) > 0;
+    }
+
     void reset() {
         offsets.clear();
         nextOffset = 8;
@@ -44,34 +48,37 @@ private:
 
 class CodeGen {
 public:
-    CodeGen(IRProgram& program) : program_(program) {}
+    CodeGen(IRProgram& program) : program(program) {}
 
     // Entry point. Writes the full .s file to outputPath.
     void generate(const std::string& outputPath);
 
 private:
-    IRProgram& program_;
+    IRProgram& program;
     const IRFunction* currentFunc;
-    std::ofstream out_;
-    StackFrame frame_;
+    std::ofstream out;
+    StackFrame frame;
 
     std::unordered_map<float, std::string> floatLabels;
+    std::vector<int> paramTempIds;
 
     void emitPreamble();
 
     void emitFunction(const IRFunction& fn);
 
-    void emitPrologue(int frameSize);
+    void emitPrologue(const IRFunction& fn, int frameSize);
 
     void emitEpilogue();
 
     // Dispatches a single instruction.
     void emitInstruction(const IRInstruction& instr);
 
+    void emitCall   (const IRInstruction& instr);
     void emitConst  (const IRInstruction& instr); // dest = constant
     void emitFConst (const IRInstruction& instr);
     void emitCmp    (const IRInstruction& instr, const std::string& setcc);
     void emitNot    (const IRInstruction& instr);
+    void emitParam  (const IRInstruction& instr);
     void emitRet    (const IRInstruction& instr); // return src1
     void emitBinop  (const IRInstruction& instr); // dest = src1 op src2
     void emitFBinop (const IRInstruction& instr);

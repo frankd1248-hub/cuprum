@@ -3,19 +3,19 @@
 #include <cstring>
 
 void CodeGen::emit(const std::string& line) {
-    out_ << "\t" << line << "\n";
+    out << "\t" << line << "\n";
 }
 
 void CodeGen::emitLabel(const std::string& label) {
-    out_ << label << ":\n";
+    out << label << ":\n";
 }
 
 std::string CodeGen::stackRef(int tempId) const {
-    return "QWORD PTR [rbp-" + std::to_string(frame_.offsetOf(tempId)) + "]";
+    return "QWORD PTR [rbp-" + std::to_string(frame.offsetOf(tempId)) + "]";
 }
 
 std::string CodeGen::fStackRef(int tempId) const {
-    return "DWORD PTR [rbp-" + std::to_string(frame_.offsetOf(tempId)) + "]";
+    return "DWORD PTR [rbp-" + std::to_string(frame.offsetOf(tempId)) + "]";
 }
 
 std::string CodeGen::resolve(const IRValue& val) const {
@@ -38,62 +38,80 @@ std::string CodeGen::floatLabel(float fval) {
 }
 
 void CodeGen::emitFloatPool() {
-    out_ << ".section .rodata\n";
+    out << ".section .rodata\n";
     for (auto& [fval, label] : floatLabels) {
-        out_ << label << ":\n";
+        out << label << ":\n";
         
         uint32_t bits;
         memcpy(&bits, &fval, 4);
-        out_ << "\t.long " << bits << "\n";
+        out << "\t.long " << bits << "\n";
     }
-    out_ << ".text\n";
+    out << ".text\n";
 }
 
 void CodeGen::generate(const std::string& outputPath) {
-    out_.open(outputPath);
+    out.open(outputPath);
     emitPreamble();
-    for (const IRFunction& fn : program_.functions)
+    for (const IRFunction& fn : program.functions)
         emitFunction(fn);
     emitFloatPool();
-    out_.close();
+    out.close();
 }
 
 void CodeGen::emitPreamble() {
-    out_ << ".intel_syntax noprefix\n\n";
+    out << ".intel_syntax noprefix\n\n";
 
-    out_ << ".global _start\n";
+    out << ".global _start\n";
     emitLabel("_start");
     emit("call\tmain");
     emit("mov\trdi, rax");   // exit code = return value of main
     emit("mov\trax, 60");    // syscall number: exit
     emit("syscall");
-    out_ << "\n";
+    out << "\n";
 }
 
 
 void CodeGen::emitFunction(const IRFunction& fn) {
-    frame_.reset();
+    frame.reset();
     currentFunc = &fn;
 
-    // Dry-run: allocate every temp
     for (const IRInstruction& instr : fn.body) {
         if (instr.dest.kind == IRValue::Kind::Temp)
-            frame_.allocate(instr.dest.id);
+            frame.allocate(instr.dest.id);
+        if (instr.op == IROp::Param)
+            paramTempIds.push_back(instr.dest.id);
+        for (const IRValue& arg : instr.args)
+            if (arg.kind == IRValue::Kind::Temp && !frame.hasSlot(arg.id))
+                frame.allocate(arg.id);
     }
 
-    out_ << ".global " << fn.name << "\n";
+    out << ".global " << fn.name << "\n";
     emitLabel(fn.name);
-    emitPrologue(frame_.frameSize());
+    emitPrologue(fn, frame.frameSize());
 
     for (const IRInstruction& instr : fn.body)
         emitInstruction(instr);
 }
 
-void CodeGen::emitPrologue(int frameSize) {
+void CodeGen::emitPrologue(const IRFunction& fn, int frameSize) {
+    static const char* intRegs[]   = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
+    static const char* floatRegs[] = { "xmm0", "xmm1", "xmm2", "xmm3",
+                                       "xmm4", "xmm5", "xmm6", "xmm7" };
+
     emit("push\trbp");
     emit("mov\trbp, rsp");
     if (frameSize > 0)
         emit("sub\trsp, " + std::to_string(frameSize));
+
+    int intIdx = 0, floatIdx = 0;
+    for (size_t i = 0; i < fn.params.size(); i++) {
+        int tempId = paramTempIds[i];
+        if (fn.params[i].type == Type::Float32t) {
+            emit("movss\t" + fStackRef(tempId) + ", " + floatRegs[floatIdx++]);
+        } else {
+            emit("mov\t" + stackRef(tempId) + ", " + intRegs[intIdx++]);
+        }
+    }
 }
 
 void CodeGen::emitEpilogue() {
@@ -128,11 +146,8 @@ void CodeGen::emitInstruction(const IRInstruction& instr) {
             emit("cmp\t" + resolve(instr.src1) + ", 0");
             emit("jne\t" + instr.label);
             break;
-        case IROp::Call:
-            emit("call\t" + instr.label);
-            if (instr.dest.kind == IRValue::Kind::Temp)
-                emit("mov\t" + stackRef(instr.dest.id) + ", rax");
-            break;
+        case IROp::Call:  emitCall(instr); break;
+        case IROp::Param: emitParam(instr); break;
         case IROp::Mov:
             emit("mov\trax, " + resolve(instr.src1));
             emit("mov\t" + stackRef(instr.dest.id) + ", rax");
@@ -147,6 +162,27 @@ void CodeGen::emitInstruction(const IRInstruction& instr) {
         case IROp::ToFloat: emitToFloat(instr); break;
         case IROp::ToInt:   emitToInt(instr); break;
     }
+}
+
+void CodeGen::emitCall(const IRInstruction& instr) {
+    static const char* intRegs[]   = { "rdi","rsi","rdx","rcx","r8","r9" };
+    static const char* floatRegs[] = { "xmm0","xmm1","xmm2","xmm3",
+                                       "xmm4","xmm5","xmm6","xmm7" };
+
+    int intIdx = 0, floatIdx = 0;
+    for (const IRValue& arg : instr.args) {
+        if (arg.type == Type::Float32t) {
+            emit("mov\trax, " + stackRef(arg.id));
+            emit("movq\t" + std::string(floatRegs[floatIdx++]) + ", rax");
+        } else {
+            emit("mov\t" + std::string(intRegs[intIdx++]) + ", " + resolve(arg));
+        }
+    }
+
+    emit("call\t" + instr.label);
+
+    if (instr.dest.kind == IRValue::Kind::Temp)
+        emit("mov\t" + stackRef(instr.dest.id) + ", rax");
 }
 
 void CodeGen::emitConst(const IRInstruction& instr) {
@@ -185,6 +221,33 @@ void CodeGen::emitNot(const IRInstruction& instr) {
     emit("sete\tal");
     emit("movzx\trax, al");
     emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+}
+
+void CodeGen::emitParam(const IRInstruction& instr) {
+    static const char* intRegs[]   = { "rdi","rsi","rdx","rcx","r8","r9" };
+    static const char* floatRegs[] = { "xmm0","xmm1","xmm2","xmm3",
+                                       "xmm4","xmm5","xmm6","xmm7" };
+
+    int paramIdx = instr.src1.ival;
+    Type paramType = currentFunc->params[paramIdx].type;
+
+    // count how many int/float params precede this one
+    int intIdx = 0, floatIdx = 0;
+    for (int i = 0; i < paramIdx; i++) {
+        if (currentFunc->params[i].type == Type::Float32t) floatIdx++;
+        else intIdx++;
+    }
+
+    if (paramType == Type::Float32t) {
+        emit("mov\trax, " + std::string(floatRegs[floatIdx]));
+        emit("movq\txmm0, rax");
+        
+        emit("movss\tDWORD PTR [rbp-" +
+             std::to_string(frame.offsetOf(instr.dest.id)) + "], " +
+             floatRegs[floatIdx]);
+    } else {
+        emit("mov\t" + stackRef(instr.dest.id) + ", " + intRegs[intIdx]);
+    }
 }
 
 void CodeGen::emitRet(const IRInstruction& instr) {

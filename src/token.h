@@ -1,5 +1,5 @@
-#ifndef ferrum_token_h
-#define ferrum_token_h
+#ifndef cuprum_token_h
+#define cuprum_token_h
 
 #include "common.h"
 

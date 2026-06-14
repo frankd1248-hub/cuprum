@@ -1,5 +1,5 @@
-#ifndef ferrum_lexer_h
-#define ferrum_lexer_h
+#ifndef cuprum_lexer_h
+#define cuprum_lexer_h
 
 #include "common.h"
 #include "error_reporter.h"

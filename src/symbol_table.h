@@ -1,17 +1,17 @@
-#ifndef ferrum_symbol_table_h
-#define ferrum_symbol_table_h
+#ifndef cuprum_symbol_table_h
+#define cuprum_symbol_table_h
 
 #include "common.h"
 #include "token.h"
 #include "ast.h"
 
 struct Symbol {
-    std::string name;
-    Type        type;
-    bool        isFunction  = false;
-    bool        isConst = false;
-    std::vector<Type> paramTypes; // empty if not a function
-    Token       declToken;        // for "previously declared at..." messages
+    std::string       name;
+    Type              type;         // return type if function
+    bool              isFunction  = false;
+    bool              isConst     = false;
+    std::vector<Type> paramTypes;   // only if isFunction
+    Token             declToken;
 };
 
 class SymbolTable {

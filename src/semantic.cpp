@@ -1,8 +1,22 @@
 #include "semantic.h"
 
 void SemanticAnalyzer::analyze(ASTProgram& program) {
-    symbols.pushScope();                    // global scope
-    program.mainFunction->accept(*this);
+    symbols.pushScope();
+
+    for (FuncDecl* fn : program.functions) {
+        Symbol sym;
+        sym.name       = fn->name.lexeme;
+        sym.type       = fn->returnType;
+        sym.isFunction = true;
+        sym.declToken  = fn->name;
+        for (auto& p : fn->params)
+            sym.paramTypes.push_back(p.type);
+        symbols.define(sym);
+    }
+
+    for (FuncDecl* fn : program.functions)
+        fn->accept(*this);
+
     symbols.popScope();
 }
 
@@ -41,23 +55,19 @@ void SemanticAnalyzer::visit(ForStmt& stmt) {
 }
 
 void SemanticAnalyzer::visit(FuncDecl& fn) {
-    symbols.define({
-        fn.name.lexeme, 
-        fn.returnType, 
-        true, 
-        false,
-        {},  // Change when adding parameters
-        fn.name}
-    );
-
-    symbols.pushScope();
     currentReturnType = fn.returnType;
-    // Define parameters here
-    symbols.popScope();
+    symbols.pushScope();
 
-    functionLinestart = fn.name.line;
+    for (auto& param : fn.params) {
+        Symbol sym;
+        sym.name      = param.name.lexeme;
+        sym.type      = param.type;
+        sym.declToken = param.name;
+        symbols.define(sym);
+    }
 
     fn.body->accept(*this);
+    symbols.popScope();
 }
 
 void SemanticAnalyzer::visit(IfStmt& stmt) {
@@ -160,6 +170,31 @@ void SemanticAnalyzer::visit(BinaryExpr& bin) {
             bin.resolvedType = Type::Boolt;
             break;
     }
+}
+
+void SemanticAnalyzer::visit(CallExpr& expr) {
+    Symbol* sym = symbols.lookup(expr.callee.lexeme);
+    if (!sym) {
+        err.report(expr.callee, "Undefined function '" + expr.callee.lexeme + "'.");
+        expr.resolvedType = Type::Nullt;
+        return;
+    } if (!sym->isFunction) {
+        err.report(expr.callee, "'" + expr.callee.lexeme + "' is not a function.");
+        expr.resolvedType = Type::Nullt;
+        return;
+    }
+    
+    if (expr.args.size() != sym->paramTypes.size()) {
+        err.report(expr.callee, "Wrong number of arguments.");
+        expr.resolvedType = Type::Nullt;
+        return;
+    }
+    for (size_t i = 0; i < expr.args.size(); i++) {
+        expr.args[i]->accept(*this);
+        if (expr.args[i]->resolvedType != sym->paramTypes[i])
+            err.report(expr.callee, "Argument " + std::to_string(i+1) + " type mismatch.");
+    }
+    expr.resolvedType = sym->type;
 }
 
 static bool isCastCompatible(Type from, Type to) {

@@ -1,5 +1,5 @@
-#ifndef ferrum_parser_h
-#define ferrum_parser_h
+#ifndef cuprum_parser_h
+#define cuprum_parser_h
 
 #include "common.h"
 #include "ast.h"

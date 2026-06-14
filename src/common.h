@@ -1,5 +1,5 @@
-#ifndef ferrum_common_h
-#define ferrum_common_h
+#ifndef cuprum_common_h
+#define cuprum_common_h
 
 #include <string>
 #include <sstream>

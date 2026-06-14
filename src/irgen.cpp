@@ -2,8 +2,10 @@
 
 IRProgram IRGen::emit(ASTProgram* program) {
     this->AST = program;
-    this->AST->mainFunction->accept(*this);
-    
+
+    for (FuncDecl* fn : this->AST->functions)
+        fn->accept(*this);
+
     return this->program;
 }
 
@@ -12,7 +14,7 @@ void IRGen::emit(IRInstruction inst) {
 }
 
 IRValue IRGen::newTemp() {
-    return IRValue { IRValue::Kind::Temp, tempCount++, -1 };
+    return IRValue { IRValue::Kind::Temp, tempCount++, Type::Nullt, -1 };
 }
 
 std::string IRGen::newLabel(const std::string& prefix) {
@@ -67,13 +69,25 @@ void IRGen::visit(ForStmt& stmt) {
     emit({ IROp::Label, {}, {}, {}, endLabel });
 }
 
-void IRGen::visit(FuncDecl& fun) {
+void IRGen::visit(FuncDecl& fn) {
     currentFunc = {};
-    currentFunc.name       = fun.name.lexeme;
-    currentFunc.returnType = fun.returnType;
+    currentFunc.name       = fn.name.lexeme;
+    currentFunc.returnType = fn.returnType;
 
-    fun.body->accept(*this);
-    this->program.functions.push_back(currentFunc);
+    for (size_t i = 0; i < fn.params.size(); i++) {
+        currentFunc.params.push_back({ fn.params[i].name.lexeme, fn.params[i].type });
+
+        IRValue dest = newTemp();
+        varTemps[fn.params[i].name.lexeme] = dest.id;
+
+        // Param N → dest temp
+        emit({ IROp::Param, dest,
+               IRValue { .kind = IRValue::Kind::IntConst, .id = -1, .ival = (int)i },
+               {}, "" });
+    }
+
+    fn.body->accept(*this);
+    program.functions.push_back(currentFunc);
 }
 
 void IRGen::visit(IfStmt& stmt) {
@@ -159,7 +173,7 @@ void IRGen::visit(AssignExpr& expr) {
     expr.value->accept(*this);
 
     int tempId = varTemps.at(expr.name.lexeme);
-    IRValue dest = IRValue { IRValue::Kind::Temp, tempId, -1 };
+    IRValue dest = IRValue { IRValue::Kind::Temp, tempId, lastValue.type, -1 };
     emit(IRInstruction { IROp::Mov, dest, lastValue, {} });
     lastValue = dest;
 }
@@ -189,6 +203,26 @@ void IRGen::visit(BinaryExpr& bin) {
     }
 
     emit(IRInstruction { op, dest, left, right, "" });
+    lastValue = dest;
+}
+
+void IRGen::visit(CallExpr& expr) {
+    std::vector<IRValue> argVals;
+    for (size_t i = 0; i < expr.args.size(); i++) {
+        expr.args[i]->accept(*this);
+        IRValue arg  = lastValue;
+        arg.type     = expr.args[i]->resolvedType;
+        argVals.push_back(arg);
+    }
+
+    IRValue dest = newTemp();
+    IRInstruction call;
+    call.op    = IROp::Call;
+    call.dest  = dest;
+    call.label = expr.callee.lexeme;
+    call.args  = argVals;
+    emit(call);
+
     lastValue = dest;
 }
 
@@ -252,8 +286,8 @@ void IRGen::visit(UnaryExpr& unary) {
     emit(IRInstruction {
         op,
         dest,
-        isFloat ? IRValue { .kind=IRValue::Kind::FloatConst, .id=-1, .fval=0.0f, } : 
-                  IRValue { .kind=IRValue::Kind::IntConst,   .id=-1, .ival=0 },
+        isFloat ? IRValue { .kind=IRValue::Kind::FloatConst, .id=-1, .type=Type::Float32t, .fval=0.0f } : 
+                  IRValue { .kind=IRValue::Kind::IntConst,   .id=-1, .type=Type::Int32t,   .ival=0},
         right, ""
     });
     lastValue = dest;
@@ -261,5 +295,5 @@ void IRGen::visit(UnaryExpr& unary) {
 
 void IRGen::visit(VarExpr& expr) {
     int tempId = varTemps.at(expr.name.lexeme);
-    lastValue = IRValue { IRValue::Kind::Temp, tempId, -1 };
+    lastValue = IRValue { IRValue::Kind::Temp, tempId, Type::Nullt, -1 };
 }

@@ -1,4 +1,4 @@
-# Ferrum
+# Cuprum
 
 I have had varying levels of success with writing interpreters, so I
 decided to try out a compiler to assembly!
@@ -11,15 +11,11 @@ I am using this project to learn more about parsing techniques,
 building a versatile IR, and generating assembly code. It has been
 teaching me a lot about assembly in general as well.
 
-Right now, the language is not even Turing-complete, but the addition of loops
-would make it so. Preferably, a string type would also be helpful.
+> If you have questions about how I chose the name "Ferrum",
+> it's Latin for *iron*, which fits well because assembly "runs" on
+> bare metal, which is iron most of the time.
 
-If you have questions about how I chose the name "Ferrum",
-it's Latin for *iron*, which fits well because assembly "runs" on
-bare metal, which is iron most of the time.
-
-I could have chosen Stannum, Aurum, Argentum, or Cuprum, but Ferrum 
-sounded the best at the time.
+Well, copper is nice too. Someone did beat me to the name, I guess.
 
 For the (currently) best interpreter I have, check out:
 

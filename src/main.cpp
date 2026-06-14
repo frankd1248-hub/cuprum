@@ -27,7 +27,7 @@ string readFile(const string& filename) {
 
 int main(int argc, char** argv) {
     if (argc != 2) {
-        cerr << "Usage: unnamed <source_file>" << endl;
+        cerr << "Usage: cuprum <source_file>" << endl;
         exit(EX_USAGE);
     }
 
@@ -35,16 +35,28 @@ int main(int argc, char** argv) {
     ErrorReporter err(cerr);
     Lexer lexer(src, err);
     vector<Token> tokens = lexer.tokenize();
+    if (err.errored()) {
+        cerr << "Lexer error.";
+        exit(1);
+    }
 
     // printTokens(cout, tokens);
     // cout << "\n\n";
 
     Parser parser(tokens, err);
     ASTProgram ast = parser.parse();
+    if (err.errored()) {
+        cerr << "Parser error.";
+        exit(1);
+    }
     
     SymbolTable symtab;
     SemanticAnalyzer sema(symtab, err);
     sema.analyze(ast);
+    if (err.errored()) {
+        cerr << "Semantic error.";
+        exit(1);
+    }
 
     IRGen irgen(&symtab);
     IRProgram ir = irgen.emit(&ast);

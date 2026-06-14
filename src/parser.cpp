@@ -42,6 +42,25 @@ static Expr* boolLit(Parser& parser, bool canAssign) {
     return literal;
 }
 
+static Expr* call(Parser& p, bool canAssign) {
+    VarExpr* callee = dynamic_cast<VarExpr*>(p.previousExpr());
+    if (!callee) {
+        p.err.report(p.previous(), "Expected function name before '('.");
+        return nullptr;
+    }
+
+    CallExpr* expr = new CallExpr();
+    expr->callee = callee->name;
+
+    if (!p.check(TK_RIGHT_PAREN)) {
+        do {
+            expr->args.push_back(p.expression(PREC_ASSIGNMENT));
+        } while (p.match(TK_COMMA));
+    }
+    p.consume(TK_RIGHT_PAREN, "Expect ')' after arguments.");
+    return expr;
+}
+
 static Expr* floatLit(Parser& parser, bool canAssign) {
     LiteralExpr* literal = new LiteralExpr();
     literal->value = std::stof(parser.previous().lexeme);
@@ -95,7 +114,7 @@ static Expr* variable(Parser& p, bool canAssign) {
 
 static ParseRule rules[] = {
     { nullptr,  nullptr, PREC_NONE       }, // TK_EOF
-    { lparen,   nullptr, PREC_CALL       }, // TK_LEFT_PAREN
+    { lparen,   call,    PREC_CALL       }, // TK_LEFT_PAREN
     { nullptr,  nullptr, PREC_NONE       }, // TK_RIGHT_PAREN
     { nullptr,  nullptr, PREC_NONE       }, // TK_LEFT_BRACE
     { nullptr,  nullptr, PREC_NONE       }, // TK_RIGHT_BRACE
@@ -220,23 +239,27 @@ ForStmt* Parser::forStatement() {
 
 FuncDecl* Parser::fnDeclaration() {
     FuncDecl* fun = new FuncDecl();
-
-    consume(TK_FN, "Expected function declaration.");
-
+    consume(TK_FN, "Expected 'fn'.");
     consume(TK_IDENTIFIER, "Expect function name.");
     fun->name = previous();
 
-    consume(TK_LEFT_PAREN, "Expect parameters.");
-    // Add parameters parsing here...
-    consume(TK_RIGHT_PAREN, "Expect end of parameters.");
+    consume(TK_LEFT_PAREN, "Expect '(' after function name.");
+    if (!check(TK_RIGHT_PAREN)) {
+        do {
+            consume(TK_IDENTIFIER, "Expect parameter name.");
+            Token paramName = previous();
+            consume(TK_COLON, "Expect ':' after parameter name.");
+            Type paramType = parseTypeKeyword();
+            fun->params.push_back({ paramName, paramType });
+        } while (match(TK_COMMA));
+    }
+    consume(TK_RIGHT_PAREN, "Expect ')' after parameters.");
 
-    consume(TK_ARROW, "Expect return type.");
-
+    consume(TK_ARROW, "Expect '=>' before return type.");
     fun->returnType = parseTypeKeyword();
 
-    consume(TK_LEFT_BRACE, "Expected function body.");
+    consume(TK_LEFT_BRACE, "Expect '{' before function body.");
     fun->body = block();
-
     return fun;
 }
 
@@ -323,14 +346,19 @@ Stmt* Parser::statement() {
 }
 
 ASTProgram Parser::parse() {
-
     program = {};
-
-    FuncDecl* main = fnDeclaration();
-    if (main->name.lexeme != "main") {
-        err.report(main->name, "Expect 'main' function.");
+    while (!isAtEnd()) {
+        FuncDecl* fn = fnDeclaration();
+        program.functions.push_back(fn);
+        if (fn->name.lexeme == "main") {
+            if (program.mainFunction == nullptr) {
+                program.mainFunction = fn;
+            } else {
+                err.report(fn->name, "A program cannot have more than one 'main' function.");
+            }
+        }
     }
-
-    program.mainFunction = main;
+    if (!program.mainFunction)
+        err.report(peek(), "No 'main' function defined.");
     return program;
 }

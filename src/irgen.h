@@ -1,5 +1,5 @@
-#ifndef ferrum_irgen_h
-#define ferrum_irgen_h
+#ifndef cuprum_irgen_h
+#define cuprum_irgen_h
 
 #include "common.h"
 #include "ast.h"
@@ -22,6 +22,7 @@ public:
 
     void visit(AssignExpr&)  override;
     void visit(BinaryExpr&)  override;
+    void visit(CallExpr&)    override;
     void visit(CastExpr&)    override;
     void visit(LiteralExpr&) override;
     void visit(UnaryExpr&)   override;
