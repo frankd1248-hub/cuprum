@@ -76,6 +76,7 @@ private:
         else if (lexeme == "i32")    return TK_I32;
         else if (lexeme == "if")     return TK_IF;
         else if (lexeme == "let")    return TK_LET;
+        else if (lexeme == "native") return TK_NATIVE;
         else if (lexeme == "return") return TK_RETURN;
         else if (lexeme == "String") return TK_STRING;
         else if (lexeme == "true")   return TK_TRUE;

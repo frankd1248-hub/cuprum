@@ -6,12 +6,10 @@
 
 struct IRValue {
     enum class Kind { Temp, IntConst, FloatConst } kind;
-    int   id;       // temp id when Kind::Temp
-    Type  type = Type::Nullt;
-    union {
-        int   ival; // when Kind::IntConst
-        float fval; // when Kind::FloatConst
-    };
+    int         id;
+    Type        type  = Type::Nullt;
+    std::string label; // for StringConst args
+    union { int ival; float fval; };
 };
 
 enum class IROp {

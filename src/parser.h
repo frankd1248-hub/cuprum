@@ -99,6 +99,7 @@ private:
     ForStmt*    forStatement();
     FuncDecl*   fnDeclaration();
     IfStmt*     ifStatement();
+    NativeStmt* nativeStatement();
     LetStmt*    letStatement(bool consumeSemicolon = true);
     ReturnStmt* returnStatement();
     WhileStmt*  whileStatement();

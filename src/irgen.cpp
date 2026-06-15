@@ -14,7 +14,7 @@ void IRGen::emit(IRInstruction inst) {
 }
 
 IRValue IRGen::newTemp() {
-    return IRValue { IRValue::Kind::Temp, tempCount++, Type::Nullt, -1 };
+    return IRValue { IRValue::Kind::Temp, tempCount++, Type::Nullt, "", -1 };
 }
 
 std::string IRGen::newLabel(const std::string& prefix) {
@@ -136,6 +136,10 @@ void IRGen::visit(LetStmt& stmt) {
     }
 }
 
+void IRGen::visit(NativeStmt& stmt) {
+
+}
+
 void IRGen::visit(ReturnStmt& ret) {
     ret.expr->accept(*this);
 
@@ -181,7 +185,7 @@ void IRGen::visit(AssignExpr& expr) {
     expr.value->accept(*this);
 
     int tempId = varTemps.at(expr.name.lexeme);
-    IRValue dest = IRValue { IRValue::Kind::Temp, tempId, lastValue.type, -1 };
+    IRValue dest = IRValue { IRValue::Kind::Temp, tempId, lastValue.type, "", -1 };
     emit(IRInstruction { IROp::Mov, dest, lastValue, {} });
     lastValue = dest;
 }
@@ -220,6 +224,8 @@ void IRGen::visit(CallExpr& expr) {
         expr.args[i]->accept(*this);
         IRValue arg  = lastValue;
         arg.type     = expr.args[i]->resolvedType;
+        if (arg.type == Type::Stringt)
+            arg.label = lastStringLabel;
         argVals.push_back(arg);
     }
 
@@ -295,6 +301,7 @@ void IRGen::visit(LiteralExpr& lit) {
     } else if (std::holds_alternative<std::string>(lit.value)) {
         const std::string& val = std::get<std::string>(lit.value);
         std::string lbl = stringLabel(val);
+        lastStringLabel = lbl;
         emit({ IROp::StringConst, dest, {}, {}, lbl });
         lastValue = dest;
     }
@@ -319,8 +326,8 @@ void IRGen::visit(UnaryExpr& unary) {
     emit(IRInstruction {
         op,
         dest,
-        isFloat ? IRValue { .kind=IRValue::Kind::FloatConst, .id=-1, .type=Type::Float32t, .fval=0.0f } : 
-                  IRValue { .kind=IRValue::Kind::IntConst,   .id=-1, .type=Type::Int32t,   .ival=0},
+        isFloat ? IRValue { .kind=IRValue::Kind::FloatConst, .id=-1, .type=Type::Float32t, .label = "", .fval=0.0f } : 
+                  IRValue { .kind=IRValue::Kind::IntConst,   .id=-1, .type=Type::Int32t,   .label = "", .ival=0},
         right, ""
     });
     lastValue = dest;
@@ -328,5 +335,5 @@ void IRGen::visit(UnaryExpr& unary) {
 
 void IRGen::visit(VarExpr& expr) {
     int tempId = varTemps.at(expr.name.lexeme);
-    lastValue = IRValue { IRValue::Kind::Temp, tempId, Type::Nullt, -1 };
+    lastValue = IRValue { IRValue::Kind::Temp, tempId, Type::Nullt, "", -1 };
 }

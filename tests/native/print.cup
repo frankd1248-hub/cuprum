@@ -1,0 +1,9 @@
+native fn println(s : String) => void;
+native fn print_int(n : i32) => void;
+
+fn main() => i32 {
+    println("Hello, Cuprum!");
+    print_int(42);
+    println("\n");
+    return 0;
+}

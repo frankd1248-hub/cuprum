@@ -17,6 +17,7 @@ public:
     void visit(ForStmt& node)     override;
     void visit(FuncDecl& node)    override;
     void visit(IfStmt& node)      override;
+    void visit(NativeStmt& node)  override;
     void visit(LetStmt& node)     override;
     void visit(ReturnStmt& node)  override;
     void visit(WhileStmt& node)   override;

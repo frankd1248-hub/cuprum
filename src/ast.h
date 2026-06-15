@@ -43,6 +43,7 @@ class ExprStmt;
 class ForStmt;
 class FuncDecl;
 class IfStmt;
+class NativeStmt;
 class LetStmt;
 class ReturnStmt;
 class WhileStmt;
@@ -64,6 +65,7 @@ public:
     virtual void visit(ForStmt&)     = 0;
     virtual void visit(FuncDecl&)    = 0;
     virtual void visit(IfStmt&)      = 0;
+    virtual void visit(NativeStmt&)  = 0;
     virtual void visit(LetStmt&)     = 0;
     virtual void visit(ReturnStmt&)  = 0;
     virtual void visit(WhileStmt&)   = 0;
@@ -217,15 +219,6 @@ public:
     BlockStmt*       body;
 };
 
-class LetStmt : public Stmt {
-public:
-    void accept(ASTVisitor& v) override { 
-        v.visit(*this); 
-    }
-
-    std::vector<VarDeclarator> declarators;
-};
-
 class IfStmt : public Stmt {
 public:
     void accept(ASTVisitor& v) override {
@@ -236,6 +229,26 @@ public:
     Expr* condition;
     Stmt* thenBranch;
     Stmt* elseBranch = nullptr;
+};
+
+class LetStmt : public Stmt {
+public:
+    void accept(ASTVisitor& v) override { 
+        v.visit(*this); 
+    }
+
+    std::vector<VarDeclarator> declarators;
+};
+
+class NativeStmt : public Stmt {
+public:
+    void accept(ASTVisitor& v) override {
+        v.visit(*this);
+    }
+
+    Type returnType;
+    Token name;
+    std::vector<Param> params;
 };
 
 class ReturnStmt : public Stmt {
@@ -261,6 +274,8 @@ public:
 struct ASTProgram {
     std::vector<FuncDecl*> functions;
     FuncDecl* mainFunction = nullptr;
+
+    std::vector<NativeStmt*> natives;
 };
 
 #endif

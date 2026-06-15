@@ -17,6 +17,7 @@ public:
     void visit(FuncDecl&)    override;
     void visit(IfStmt&)      override;
     void visit(LetStmt&)     override;
+    void visit(NativeStmt&)  override;
     void visit(ReturnStmt&)  override;
     void visit(WhileStmt&)   override;
 
@@ -39,6 +40,7 @@ private:
     IRValue    lastValue;   // result of the most recently visited Expr
     int        tempCount = 0;
     int labelCount = 0;
+    std::string lastStringLabel;
 
     SymbolTable* table;
     ASTProgram* AST;

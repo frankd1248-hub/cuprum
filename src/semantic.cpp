@@ -14,6 +14,17 @@ void SemanticAnalyzer::analyze(ASTProgram& program) {
         symbols.define(sym);
     }
 
+    for (NativeStmt* native : program.natives) {
+        Symbol sym;
+        sym.name       = native->name.lexeme;
+        sym.type       = native->returnType;
+        sym.isFunction = true;
+        sym.declToken  = native->name;
+        for (auto& p : native->params)
+            sym.paramTypes.push_back(p.type);
+        symbols.define(sym);
+    }
+
     for (FuncDecl* fn : program.functions)
         fn->accept(*this);
 
@@ -80,6 +91,10 @@ void SemanticAnalyzer::visit(IfStmt& stmt) {
 
     if (stmt.elseBranch)
         stmt.elseBranch->accept(*this);
+}
+
+void SemanticAnalyzer::visit(NativeStmt& stmt) {
+    
 }
 
 void SemanticAnalyzer::visit(LetStmt& stmt) {

@@ -38,6 +38,7 @@ std::string CodeGen::floatLabel(float fval) {
 }
 
 void CodeGen::emitFloatPool() {
+    if (floatLabels.empty()) return;
     out << ".section .rodata\n";
     for (auto& [fval, label] : floatLabels) {
         out << label << ":\n";
@@ -57,9 +58,15 @@ void CodeGen::emitStringPool() {
         out << "\t.quad " << value.size() << "\n";
         out << label << ":\n";
         out << "\t.string \"";
-        for (char c : value) {
-            if (c == '"' || c == '\\') out << '\\';
-            out << c;
+        for (unsigned char c : value) {
+            if      (c == '"')  out << "\\\"";
+            else if (c == '\\') out << "\\\\";
+            else if (c == '\n') out << "\\n";
+            else if (c == '\t') out << "\\t";
+            else if (c == '\r') out << "\\r";
+            else if (c < 32 || c > 126)
+                out << "\\x" << std::hex << (int)c << std::dec;
+            else out << c;
         }
         out << "\"\n";
     }
@@ -245,6 +252,12 @@ void CodeGen::emitCall(const IRInstruction& instr) {
         if (arg.type == Type::Float32t) {
             emit("mov\trax, " + stackRef(arg.id));
             emit("movq\t" + std::string(floatRegs[floatIdx++]) + ", rax");
+        } else if (arg.type == Type::Stringt) {
+            
+            emit("lea\trax, [" + arg.label + "_len + rip]");
+            emit("mov\t" + std::string(intRegs[intIdx++]) + ", QWORD PTR [rax]");
+            emit("lea\trax, [" + arg.label + " + rip]");
+            emit("mov\t" + std::string(intRegs[intIdx++]) + ", rax");
         } else {
             emit("mov\t" + std::string(intRegs[intIdx++]) + ", " + resolve(arg));
         }

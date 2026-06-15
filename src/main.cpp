@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     Lexer lexer(src, err);
     vector<Token> tokens = lexer.tokenize();
     if (err.errored()) {
-        cerr << "Lexer error.";
+        cerr << "Lexer error.\n";
         exit(1);
     }
 
@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
     Parser parser(tokens, err);
     ASTProgram ast = parser.parse();
     if (err.errored()) {
-        cerr << "Parser error.";
+        cerr << "Parser error.\n";
         exit(1);
     }
     
@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
     SemanticAnalyzer sema(symtab, err);
     sema.analyze(ast);
     if (err.errored()) {
-        cerr << "Semantic error.";
+        cerr << "Semantic error.\n";
         exit(1);
     }
 
@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     codegen.generate(string("./build/") + path + ".s");
 
     string assembleInstruction = string("as ./build/") + path + ".s -o ./build/" + path + ".o"; 
-    string linkInstruction = string("ld ./build/") + path + ".o -o " + path;
+    string linkInstruction = "ld -o " + path + " ./build/" + path + ".o ./stdlib/std.o";
     string deleteFiles = string("rm ") + path + ".s " + path + ".o";
 
     // cout << assembleInstruction << "\n" << linkInstruction << "\n" << deleteFiles << "\n";

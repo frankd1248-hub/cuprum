@@ -179,6 +179,7 @@ static ParseRule rules[] = {
     { nullptr,  nullptr, PREC_NONE       }, // TK_ELSE
     { nullptr,  nullptr, PREC_NONE       }, // TK_FOR
     { nullptr,  nullptr, PREC_NONE       }, // TK_WHILE 
+    { nullptr,  nullptr, PREC_NONE       }, // TK_NATIVE
 };
 
 static Precedence getPrecedence(TokenType type) {
@@ -312,6 +313,30 @@ IfStmt* Parser::ifStatement() {
     return stmt;
 }
 
+NativeStmt* Parser::nativeStatement() {
+    NativeStmt* stmt = new NativeStmt();
+
+    consume(TK_IDENTIFIER, "Expect native function name.");
+    stmt->name = previous();
+
+    consume(TK_LEFT_PAREN, "Expect '(' after native function name.");
+    if (!check(TK_RIGHT_PAREN)) {
+        do {
+            consume(TK_IDENTIFIER, "Expect parameter name.");
+            Token paramName = previous();
+            consume(TK_COLON, "Expect ':' after parameter name.");
+            Type paramType = parseTypeKeyword();
+            stmt->params.push_back({ paramName, paramType });
+        } while (match(TK_COMMA));
+    }
+    consume(TK_RIGHT_PAREN, "Expect ')' after parameters.");
+
+    consume(TK_ARROW, "Expect '=>' before return type.");
+    stmt->returnType = parseTypeKeyword();
+
+    return stmt;
+}
+
 LetStmt* Parser::letStatement(bool consumeSemicolon) {
     LetStmt* stmt = new LetStmt();
 
@@ -380,13 +405,19 @@ Stmt* Parser::statement() {
 ASTProgram Parser::parse() {
     program = {};
     while (!isAtEnd()) {
-        FuncDecl* fn = fnDeclaration();
-        program.functions.push_back(fn);
-        if (fn->name.lexeme == "main") {
-            if (program.mainFunction == nullptr) {
-                program.mainFunction = fn;
-            } else {
-                err.report(fn->name, "A program cannot have more than one 'main' function.");
+        if (match(TK_NATIVE)) {
+            consume(TK_FN, "Expect 'fn' after 'native'.");
+            NativeStmt* native = nativeStatement();
+            consume(TK_SEMICOLON, "Expect ';' after native declaration.");
+            program.natives.push_back(native);
+        } else {
+            FuncDecl* fn = fnDeclaration();
+            program.functions.push_back(fn);
+            if (fn->name.lexeme == "main") {
+                if (!program.mainFunction)
+                    program.mainFunction = fn;
+                else
+                    err.report(fn->name, "Cannot have more than one 'main'.");
             }
         }
     }
