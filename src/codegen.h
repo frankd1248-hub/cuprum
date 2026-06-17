@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include "common.h"
 #include "ir.h"
+#include "regalloc.h"
 
 // Tracks each temp's stack slot (offset from rbp, e.g. -8, -16, ...)
 class StackFrame {
@@ -63,6 +64,10 @@ private:
     std::unordered_map<float, std::string> floatLabels;
     std::unordered_map<std::string, std::string> stringLabels;
     std::vector<int> paramTempIds;
+
+    std::unordered_map<int, std::string> regMap;
+    std::vector<std::string> savedRegs;
+    RegAlloc regAlloc;
 
     void emitPreamble();
 

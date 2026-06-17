@@ -19,11 +19,16 @@ std::string CodeGen::fStackRef(int tempId) const {
 }
 
 std::string CodeGen::resolve(const IRValue& val) const {
-    if (val.kind == IRValue::Kind::Temp)
+    if (val.kind == IRValue::Kind::Temp) {
+        auto it = regMap.find(val.id);
+        if (it != regMap.end())
+            return it->second;
         return stackRef(val.id);
-    else if (val.kind == IRValue::Kind::IntConst) 
+    }
+
+    if (val.kind == IRValue::Kind::IntConst)
         return std::to_string(val.ival);
-    else if (val.kind == IRValue::Kind::FloatConst) 
+    if (val.kind == IRValue::Kind::FloatConst)
         return std::to_string(val.fval);
     return "?";
 }
@@ -98,16 +103,22 @@ void CodeGen::emitPreamble() {
 
 void CodeGen::emitFunction(const IRFunction& fn) {
     frame.reset();
+    paramTempIds.clear();
     currentFunc = &fn;
 
+    regMap = regAlloc.allocate(fn);
+
     for (const IRInstruction& instr : fn.body) {
-        if (instr.dest.kind == IRValue::Kind::Temp)
+        if (instr.dest.kind == IRValue::Kind::Temp && !regMap.contains(instr.dest.id))
             frame.allocate(instr.dest.id);
+
         if (instr.op == IROp::Param)
             paramTempIds.push_back(instr.dest.id);
-        for (const IRValue& arg : instr.args)
-            if (arg.kind == IRValue::Kind::Temp && !frame.hasSlot(arg.id))
+
+        for (const IRValue& arg : instr.args) {
+            if (arg.kind == IRValue::Kind::Temp && !regMap.contains(arg.id) && !frame.hasSlot(arg.id))
                 frame.allocate(arg.id);
+        }
     }
 
     out << ".global " << fn.name << "\n";
@@ -119,29 +130,32 @@ void CodeGen::emitFunction(const IRFunction& fn) {
 }
 
 void CodeGen::emitPrologue(const IRFunction& fn, int frameSize) {
-    static const char* intRegs[]   = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
-    static const char* floatRegs[] = { "xmm0", "xmm1", "xmm2", "xmm3",
-                                       "xmm4", "xmm5", "xmm6", "xmm7" };
+    static const std::vector<std::string> calleeSaved =
+        { "rbx", "r12", "r13", "r14", "r15" };
+
+    savedRegs.clear();
+    for (auto& [id, reg] : regMap)
+        if (std::find(calleeSaved.begin(), calleeSaved.end(), reg)
+            != calleeSaved.end())
+            if (std::find(savedRegs.begin(), savedRegs.end(), reg)
+                == savedRegs.end())
+                savedRegs.push_back(reg);
+
+    for (const std::string& reg : savedRegs)
+        emit("push\t" + reg);
 
     emit("push\trbp");
     emit("mov\trbp, rsp");
+
     if (frameSize > 0)
         emit("sub\trsp, " + std::to_string(frameSize));
-
-    int intIdx = 0, floatIdx = 0;
-    for (size_t i = 0; i < fn.params.size(); i++) {
-        int tempId = paramTempIds[i];
-        if (fn.params[i].type == Type::Float32t) {
-            emit("movss\t" + fStackRef(tempId) + ", " + floatRegs[floatIdx++]);
-        } else {
-            emit("mov\t" + stackRef(tempId) + ", " + intRegs[intIdx++]);
-        }
-    }
 }
 
 void CodeGen::emitEpilogue() {
     emit("mov\trsp, rbp");
     emit("pop\trbp");
+    for (auto it = savedRegs.rbegin(); it != savedRegs.rend(); ++it)
+        emit("pop\t" + *it);
     emit("ret");
 }
 
@@ -151,11 +165,11 @@ void CodeGen::emitInstruction(const IRInstruction& instr) {
         case IROp::FConst: emitFConst(instr); break;
         case IROp::CharConst:
             emit("mov\trax, " + std::to_string(instr.src1.ival));
-            emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+            emit("mov\t" + resolve(instr.dest) + ", rax");
             break;
         case IROp::StringConst: {
             emit("lea\trax, [" + instr.label + " + rip]");
-            emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+            emit("mov\t" + resolve(instr.dest) + ", rax");
             break;
         }
         case IROp::Index: emitIndex(instr); break;
@@ -185,14 +199,14 @@ void CodeGen::emitInstruction(const IRInstruction& instr) {
         case IROp::Param: emitParam(instr); break;
         case IROp::Mov:
             emit("mov\trax, " + resolve(instr.src1));
-            emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+            emit("mov\t" + resolve(instr.dest) + ", rax");
             break;
         case IROp::ToBool:
             emit("mov\trax, " + resolve(instr.src1));
             emit("cmp\trax, 0");
             emit("setne\tal");
             emit("movzx\trax, al");
-            emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+            emit("mov\t" + resolve(instr.dest) + ", rax");
             break;
         case IROp::ToFloat: emitToFloat(instr); break;
         case IROp::ToInt:   emitToInt(instr); break;
@@ -200,29 +214,19 @@ void CodeGen::emitInstruction(const IRInstruction& instr) {
 }
 
 void CodeGen::emitBinop(const IRInstruction& instr) {
-    if (instr.src1.kind == IRValue::Kind::Temp)
-        emit("mov\trax, " + resolve(instr.src1));
-    else if (instr.src1.kind == IRValue::Kind::IntConst)
-        emit("mov\trax, " + std::to_string(instr.src1.ival));
-
-    if (instr.src2.kind == IRValue::Kind::Temp)
-        emit("mov\trbx, " + resolve(instr.src2));
-    else if (instr.src2.kind == IRValue::Kind::IntConst)
-        emit("mov\trbx, " + std::to_string(instr.src2.ival));
+    std::string dest = resolve(instr.dest);
+    emit("mov\trax, " + resolve(instr.src1));
+    emit("mov\trax, " + resolve(instr.src1));
+    emit("mov\tr9,  " + resolve(instr.src2));
 
     switch (instr.op) {
-        case IROp::Add: emit("add\trax, rbx"); break;
-        case IROp::Sub: emit("sub\trax, rbx"); break;
-        case IROp::Mul: emit("imul\trax, rbx"); break;
-        case IROp::Div:
-            emit("cqo");
-            emit("idiv\trbx");
-            // quotient is in rax, remainder in rdx
-            break;
+        case IROp::Add: emit("add\trax, r9");  break;
+        case IROp::Sub: emit("sub\trax, r9");  break;
+        case IROp::Mul: emit("imul\trax, r9"); break;
+        case IROp::Div: emit("cqo"); emit("idiv\tr9"); break;
         default: break;
     }
-
-    emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+    emit("mov\t" + dest + ", rax");
 }
 
 void CodeGen::emitFBinop(const IRInstruction& instr) {
@@ -250,7 +254,7 @@ void CodeGen::emitCall(const IRInstruction& instr) {
     int intIdx = 0, floatIdx = 0;
     for (const IRValue& arg : instr.args) {
         if (arg.type == Type::Float32t) {
-            emit("mov\trax, " + stackRef(arg.id));
+            emit("mov\trax, " + resolve(arg));
             emit("movq\t" + std::string(floatRegs[floatIdx++]) + ", rax");
         } else if (arg.type == Type::Stringt) {
             
@@ -265,29 +269,27 @@ void CodeGen::emitCall(const IRInstruction& instr) {
 
     emit("call\t" + instr.label);
 
-    if (instr.dest.kind == IRValue::Kind::Temp)
-        emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+    if (instr.dest.kind == IRValue::Kind::Temp) {
+        auto it = regMap.find(instr.dest.id);
+        if (it != regMap.end())
+            emit("mov\t" + it->second + ", rax");
+        else
+            emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+    }
 }
 
 void CodeGen::emitCmp(const IRInstruction& instr, const std::string& setcc) {
     emit("mov\trax, " + resolve(instr.src1));
-    emit("mov\trbx, " + resolve(instr.src2));
-    emit("cmp\trax, rbx");
+    emit("mov\tr9,  " + resolve(instr.src2));
+    emit("cmp\trax, r9");
     emit(setcc + "\tal");
     emit("movzx\trax, al");
-    emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+    emit("mov\t" + resolve(instr.dest) + ", rax");
 }
 
 void CodeGen::emitConst(const IRInstruction& instr) {
-    if (instr.src1.kind == IRValue::Kind::IntConst) {
-        if (instr.src1.ival== 0) {
-            emit("xor\teax, eax");
-        } else {
-            emit("mov\trax, " + std::to_string(instr.src1.ival));
-        }
-
-        emit("mov\t" + stackRef(instr.dest.id) + ", rax");
-    }
+    std::string dest = resolve(instr.dest);
+    emit("mov\t" + dest + ", " + std::to_string(instr.src1.ival));
 }
 
 void CodeGen::emitFConst(const IRInstruction& instr) {
@@ -295,14 +297,14 @@ void CodeGen::emitFConst(const IRInstruction& instr) {
     std::string lbl = floatLabel(fval);
     emit("movss\txmm0, DWORD PTR [" + lbl + " + rip]");
     emit("movq\trax, xmm0");
-    emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+    emit("mov\t" + resolve(instr.dest) + ", rax");
 }
 
 void CodeGen::emitIndex(const IRInstruction& instr) {
     emit("mov\trax, " + resolve(instr.src1));
     emit("mov\trcx, " + resolve(instr.src2));
     emit("movzx\teax, BYTE PTR [rax + rcx]");
-    emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+    emit("mov\t" + resolve(instr.dest) + ", rax");
 }
 
 void CodeGen::emitNot(const IRInstruction& instr) {
@@ -311,7 +313,7 @@ void CodeGen::emitNot(const IRInstruction& instr) {
     emit("cmp\trax, 0");
     emit("sete\tal");
     emit("movzx\trax, al");
-    emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+    emit("mov\t" + resolve(instr.dest) + ", rax");
 }
 
 void CodeGen::emitParam(const IRInstruction& instr) {
@@ -322,7 +324,6 @@ void CodeGen::emitParam(const IRInstruction& instr) {
     int paramIdx = instr.src1.ival;
     Type paramType = currentFunc->params[paramIdx].type;
 
-    // count how many int/float params precede this one
     int intIdx = 0, floatIdx = 0;
     for (int i = 0; i < paramIdx; i++) {
         if (currentFunc->params[i].type == Type::Float32t) floatIdx++;
@@ -330,14 +331,9 @@ void CodeGen::emitParam(const IRInstruction& instr) {
     }
 
     if (paramType == Type::Float32t) {
-        emit("mov\trax, " + std::string(floatRegs[floatIdx]));
-        emit("movq\txmm0, rax");
-        
-        emit("movss\tDWORD PTR [rbp-" +
-             std::to_string(frame.offsetOf(instr.dest.id)) + "], " +
-             floatRegs[floatIdx]);
+        emit("movss\t" + fStackRef(instr.dest.id) + ", " + floatRegs[floatIdx]);
     } else {
-        emit("mov\t" + stackRef(instr.dest.id) + ", " + intRegs[intIdx]);
+        emit("mov\t" + resolve(instr.dest) + ", " + intRegs[intIdx]);
     }
 }
 
@@ -369,5 +365,5 @@ void CodeGen::emitToInt(const IRInstruction& instr) {
     emit("mov\trax, " + resolve(instr.src1));
     emit("movq\txmm0, rax");
     emit("cvttss2si\teax, xmm0");
-    emit("mov\t" + stackRef(instr.dest.id) + ", rax");
+    emit("mov\t" + resolve(instr.dest) + ", rax");
 }

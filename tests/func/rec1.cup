@@ -1,8 +1,14 @@
+native fn print_int(n : i32) => void;
+native fn println(s : String) => void;
+
 fn factorial(n : i32) => i32 {
     if (n < 2) { return 1; }
     return n * factorial(n - 1);
 }
 
 fn main() => i32 {
-    return factorial(6); // expect 208 (720 & 0xff)
+    let fac : i32 = factorial(12);
+    print_int(fac);
+    println(" ");
+    return 0;
 }
