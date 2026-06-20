@@ -9,7 +9,7 @@ struct IRValue {
     int   id   = -1;
     Type  type = Type::Nullt;
     std::string label;
-    union { int ival = 0; float fval; };
+    union { int64_t ival = 0; float fval; };
 };
 
 enum class IROp {

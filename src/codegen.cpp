@@ -319,7 +319,8 @@ void CodeGen::emitCmp(const IRInstruction& instr, const std::string& setcc) {
 
 void CodeGen::emitConst(const IRInstruction& instr) {
     std::string dest = resolve(instr.dest);
-    emit("mov\t" + dest + ", " + std::to_string(instr.src1.ival));
+    emit("mov\trax, " + std::to_string(instr.src1.ival));
+    emit("mov\t" + dest + ", rax");
 }
 
 void CodeGen::emitFConst(const IRInstruction& instr) {
@@ -392,8 +393,14 @@ void CodeGen::emitToFloat(const IRInstruction& instr) {
 }
 
 void CodeGen::emitToInt(const IRInstruction& instr) {
-    emit("mov\trax, " + resolve(instr.src1));
-    emit("movq\txmm0, rax");
-    emit("cvttss2si\teax, xmm0");
-    emit("mov\t" + resolve(instr.dest) + ", rax");
+    if (instr.src1.type == Type::Float32t) {
+        emit("mov\trax, " + resolve(instr.src1));
+        emit("movq\txmm0, rax");
+        emit("cvttss2si\teax, xmm0");
+        emit("mov\t" + resolve(instr.dest) + ", rax");
+    } else {
+        emit("mov\trax, " + resolve(instr.src1));
+        emit("movsxd\trax, eax");
+        emit("mov\t" + resolve(instr.dest) + ", rax");
+    }
 }

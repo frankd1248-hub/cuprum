@@ -32,6 +32,7 @@ void print_int(int32_t n) {
         sys_write(1, "-", 1);
         n = -n;
     }
+
     char buf[12];
     int i = 11;
     buf[i] = '\0';
@@ -41,6 +42,24 @@ void print_int(int32_t n) {
         n /= 10;
     }
     int len = 11 - i;
+    sys_write(1, buf + i, len);
+}
+
+void print_long(int64_t n) {
+    if (n < 0) {
+        sys_write(1, "-", 1);
+        n = -n;
+    }
+
+    char buf[21];
+    int i = 20;
+    buf[i] = '\0';
+    if (n == 0) { sys_write(1, "0", 1); return; }
+    while (n > 0) {
+        buf[--i] = '0' + (n % 10);
+        n /= 10;
+    }
+    int len = 20 - i;
     sys_write(1, buf + i, len);
 }
 

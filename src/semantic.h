@@ -42,6 +42,8 @@ private:
     Type currentReturnType = Type::Voidt; // set when entering a FuncDecl, checked in ReturnStmt
     int functionLinestart;
     int loopDepth = 0;
+
+    ArrayType getArrayType(Expr* expr);
 };
 
 #endif

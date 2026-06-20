@@ -10,6 +10,7 @@ void Optimizer::optimize() {
 void Optimizer::optimizeFunction(IRFunction& fn) {
     constantFolding(fn.body);
     copyPropagation(fn.body);
+    constantFolding(fn.body);
     deadCodeElimination(fn.body);
     deadBranchElimination(fn.body);
     emptyLabelElimination(fn.body);
@@ -17,6 +18,7 @@ void Optimizer::optimizeFunction(IRFunction& fn) {
     emptyLabelElimination(fn.body);
     unreachableCodeElimination(fn.body);
     copyPropagation(fn.body);
+    constantFolding(fn.body);
     deadCodeElimination(fn.body);
     emptyLabelElimination(fn.body);
     redundantJumpElimination(fn.body);
@@ -90,9 +92,9 @@ void Optimizer::constantFolding(std::vector<IRInstruction>& body) {
                 result = IRValue { .kind = IRValue::Kind::FloatConst, .id = -1, .fval = val };
         } else {
             // integer folding
-            int l = lhs.ival;
-            int r = rhs.ival;
-            int val;
+            int64_t l = lhs.ival;
+            int64_t r = rhs.ival;
+            int64_t val;
             switch (instr.op) {
                 case IROp::Add: val = l + r; break;
                 case IROp::Sub: val = l - r; break;

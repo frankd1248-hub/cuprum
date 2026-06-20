@@ -10,6 +10,7 @@ enum class Type {
     Arrayt,
     Boolt,
     Int32t,
+    Int64t,
     Float32t,
     Chart,
     Stringt,
@@ -28,6 +29,7 @@ inline std::string TypetoString(Type t) {
         case Type::Boolt:    return "bool";
         case Type::Chart:    return "char";
         case Type::Int32t:   return "i32";
+        case Type::Int64t:   return "i64";
         case Type::Float32t: return "f32";
         case Type::Stringt:  return "String";
         case Type::Voidt:    return "void";
@@ -191,7 +193,7 @@ public:
         visitor.visit(*this);
     }
 
-    std::variant<int32_t, _Float32, bool, char, std::string> value;
+    std::variant<int32_t, int64_t, _Float32, bool, char, std::string> value;
 };
 
 class UnaryExpr : public Expr {
@@ -255,10 +257,11 @@ public:
 
 struct VarDeclarator {
     Token      name;
-    Type       type;
-    ArrayType  arrayType;  // only used when type == Arrayt
-    bool       isConst = false;
-    Expr*      init;
+    Type       type      = Type::Nullt;
+    ArrayType  arrayType;
+    bool       isConst   = false;
+    bool       inferred  = false;
+    Expr*      init      = nullptr;
 };
 
 class ForStmt : public Stmt {

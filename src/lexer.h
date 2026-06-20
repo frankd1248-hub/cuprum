@@ -76,6 +76,7 @@ private:
         else if (lexeme == "fn")       return TK_FN;
         else if (lexeme == "for")      return TK_FOR;
         else if (lexeme == "i32")      return TK_I32;
+        else if (lexeme == "i64")      return TK_I64;
         else if (lexeme == "if")       return TK_IF;
         else if (lexeme == "let")      return TK_LET;
         else if (lexeme == "native")   return TK_NATIVE;

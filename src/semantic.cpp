@@ -111,24 +111,32 @@ void SemanticAnalyzer::visit(NativeStmt& stmt) {
 
 void SemanticAnalyzer::visit(LetStmt& stmt) {
     for (auto& decl : stmt.declarators) {
-        decl.init->accept(*this);
+        decl.init->accept(*this);  // resolve init type first
 
-        if (decl.type == Type::Arrayt) {
-            auto* arrLit = dynamic_cast<ArrayLiteral*>(decl.init);
-            if (!arrLit) {
-                err.report(decl.name, "Array must be initialized with an array literal.");
-            } else if ((int)arrLit->elements.size() != decl.arrayType.size) {
-                err.report(decl.name, "Array literal size does not match declared size.");
-            } else if (arrLit->arrayType.elementType != decl.arrayType.elementType) {
-                err.report(decl.name, "Array element type mismatch.");
+        if (decl.inferred) {
+            // infer type from initializer
+            decl.type      = decl.init->resolvedType;
+            decl.arrayType = getArrayType(decl.init); // see below
+        } else {
+            if (decl.type == Type::Arrayt) {
+                auto* arrLit = dynamic_cast<ArrayLiteral*>(decl.init);
+                if (!arrLit) {
+                    err.report(decl.name, "Array must be initialized with an array literal.");
+                } else if ((int)arrLit->elements.size() != decl.arrayType.size) {
+                    err.report(decl.name, "Array literal size does not match declared size.");
+                } else if (arrLit->arrayType.elementType != decl.arrayType.elementType) {
+                    err.report(decl.name, "Array element type mismatch.");
+                }
+            } else if (decl.type == Type::Int64t &&
+                       decl.init->resolvedType == Type::Int32t) {
+                if (auto* lit = dynamic_cast<LiteralExpr*>(decl.init)) {
+                    lit->value        = (int64_t)std::get<int32_t>(lit->value);
+                    lit->resolvedType = Type::Int64t;
+                }
+            } else if (decl.init->resolvedType != decl.type) {
+                err.report(decl.name, "Type mismatch in declaration.");
             }
         }
-
-        if (decl.type != Type::Arrayt && decl.init->resolvedType != decl.type)
-            err.report(decl.name, 
-                "Initializer type does not match declared type: initializer is of type " 
-                + TypetoString(decl.init->resolvedType) + " and declared is "
-                + TypetoString(decl.type));
 
         Symbol sym;
         sym.name      = decl.name.lexeme;
@@ -136,10 +144,15 @@ void SemanticAnalyzer::visit(LetStmt& stmt) {
         sym.arrayType = decl.arrayType;
         sym.isConst   = decl.isConst;
         sym.declToken = decl.name;
-
         if (!symbols.define(sym))
-            err.report(decl.name, "Variable '" + sym.name + "' already declared in this scope.");
+            err.report(decl.name, "'" + sym.name + "' already declared in this scope.");
     }
+}
+
+ArrayType SemanticAnalyzer::getArrayType(Expr* expr) {
+    if (auto* arr = dynamic_cast<ArrayLiteral*>(expr))
+        return arr->arrayType;
+    return {};
 }
 
 void SemanticAnalyzer::visit(ReturnStmt& ret) {
@@ -210,8 +223,10 @@ void SemanticAnalyzer::visit(BinaryExpr& bin) {
                 if (L != Type::Float32t || R != Type::Float32t)
                     err.report(bin.op, "Mixed i32/f32 arithmetic requires an explicit cast.");
                 bin.resolvedType = Type::Float32t;
-            } else if (L == Type::Int32t && R == Type::Int32t) {
-                bin.resolvedType = Type::Int32t;
+            } if ((L == Type::Int32t || L == Type::Int64t) &&
+                (R == Type::Int32t || R == Type::Int64t)) {
+                bin.resolvedType = (L == Type::Int64t || R == Type::Int64t)
+                    ? Type::Int64t : Type::Int32t;
             } else {
                 err.report(bin.op, "Arithmetic operands must be i32 or f32.");
             }
@@ -232,7 +247,8 @@ void SemanticAnalyzer::visit(BinaryExpr& bin) {
                 err.report(bin.op, "Relational operands must be i32.");
             bin.resolvedType = Type::Boolt;
             break;
-    }
+        
+    } 
 }
 
 void SemanticAnalyzer::visit(CallExpr& expr) {
@@ -265,6 +281,8 @@ static bool isCastCompatible(Type from, Type to) {
 
     // From A to B
     static const std::pair<Type,Type> allowed[] = {
+        { Type::Int32t,   Type::Int64t },
+        { Type::Int64t,   Type::Int32t },
         { Type::Int32t,   Type::Boolt  },
         { Type::Boolt,    Type::Int32t },
         { Type::Int32t,   Type::Float32t },
@@ -350,6 +368,8 @@ void SemanticAnalyzer::visit(IndexAssignExpr& expr) {
 void SemanticAnalyzer::visit(LiteralExpr& lit) {
     if (std::holds_alternative<int32_t>(lit.value))
         lit.resolvedType = Type::Int32t;
+    else if (std::holds_alternative<int64_t>(lit.value))
+        lit.resolvedType = Type::Int64t;
     else if (std::holds_alternative<bool>(lit.value))
         lit.resolvedType = Type::Boolt;
     else if (std::holds_alternative<char>(lit.value))

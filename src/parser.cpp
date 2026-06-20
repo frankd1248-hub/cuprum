@@ -115,10 +115,17 @@ static Expr* index(Parser& p, bool canAssign) {
     return expr;
 }
 
+static Expr* lnumber(Parser& parser, bool canAssign) {
+    LiteralExpr* literal = new LiteralExpr();
+    literal->value = (int64_t) std::stoll(parser.previous().lexeme);
+    return literal;
+}
+
 static Expr* lparen(Parser& parser, bool canAssign) {
     TokenType next = parser.peek().type;
 
-    if (next == TK_I32 || next == TK_F32 || next == TK_BOOL || next == TK_VOID) {
+    if (next == TK_I32 || next == TK_I64 || next == TK_F32 || 
+        next == TK_BOOL || next == TK_VOID) {
         if (parser.peekNext().type == TK_RIGHT_PAREN) {
             // it's a cast
             parser.advance();
@@ -141,7 +148,7 @@ static Expr* lparen(Parser& parser, bool canAssign) {
 
 static Expr* number(Parser& parser, bool canAssign) {
     LiteralExpr* literal = new LiteralExpr();
-    literal->value = std::stoi(parser.previous().lexeme);
+    literal->value = (int32_t) std::stoi(parser.previous().lexeme);
     return literal;
 }
 
@@ -192,10 +199,12 @@ static ParseRule rules[] = {
     { nullptr,  binary,  PREC_COMPARISON }, // TK_GREATER_EQUAL
     { unary,    nullptr, PREC_NONE       }, // TK_BANG
     { number,   nullptr, PREC_NONE       }, // TK_NUMBER
+    { lnumber,  nullptr, PREC_NONE       }, // TK_LNUMBER
     { floatLit, nullptr, PREC_NONE       }, // TK_FLOAT
     { charLit,  nullptr, PREC_NONE       }, // TK_CHAR_LIT
     { strLit,   nullptr, PREC_NONE       }, // TK_STRING_LIT
     { nullptr,  nullptr, PREC_NONE       }, // TK_I32
+    { nullptr,  nullptr, PREC_NONE       }, // TK_I64
     { nullptr,  nullptr, PREC_NONE       }, // TK_F32
     { nullptr,  nullptr, PREC_NONE       }, // TK_VOID
     { nullptr,  nullptr, PREC_NONE       }, // TK_BOOL
@@ -249,6 +258,7 @@ Type Parser::parseTypeKeyword() {
     if      (match(TK_BOOL))   return Type::Boolt;
     else if (match(TK_CHAR))   return Type::Chart;
     else if (match(TK_I32))    return Type::Int32t;
+    else if (match(TK_I64))    return Type::Int64t;
     else if (match(TK_F32))    return Type::Float32t;
     else if (match(TK_STRING)) return Type::Stringt;
     else if (match(TK_VOID))   return Type::Voidt;
@@ -261,6 +271,7 @@ Type Parser::parseTypeKeyword_prev() {
         case TK_BOOL:   return Type::Boolt;
         case TK_CHAR:   return Type::Chart;
         case TK_I32:    return Type::Int32t;
+        case TK_I64:    return Type::Int64t;
         case TK_F32:    return Type::Float32t;
         case TK_STRING: return Type::Stringt;
         case TK_VOID:   return Type::Voidt;
@@ -402,22 +413,28 @@ NativeStmt* Parser::nativeStatement() {
 }
 
 LetStmt* Parser::letStatement(bool consumeSemicolon) {
-    LetStmt* stmt = new LetStmt();
+    auto* stmt = new LetStmt();
 
     do {
         VarDeclarator decl;
-
         decl.isConst = match(TK_CONST);
 
         consume(TK_IDENTIFIER, "Expect variable name.");
         decl.name = previous();
 
-        consume(TK_COLON, "Expect ':' after variable name.");
-        auto [type, arrayType] = parseTypeAnnotation();
-        decl.type      = type;
-        decl.arrayType = arrayType;
+        if (match(TK_COLON)) {
+            // explicit type annotation
+            auto [type, arrayType] = parseTypeAnnotation();
+            decl.type      = type;
+            decl.arrayType = arrayType;
+            decl.inferred  = false;
+        } else {
+            // no annotation — infer from initializer
+            decl.type     = Type::Nullt;
+            decl.inferred = true;
+        }
 
-        consume(TK_EQUAL, "Expect '=' after type.");
+        consume(TK_EQUAL, "Expect '=' after variable name.");
         decl.init = expression(PREC_ASSIGNMENT);
 
         stmt->declarators.push_back(decl);

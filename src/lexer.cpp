@@ -23,6 +23,9 @@ std::vector<Token> Lexer::tokenize() {
                 advance(); // consume '.'
                 while (isDigit(peek())) advance();
                 addToken(TK_FLOAT, src.substr(start, current - start));
+            } else if (peek() == 'l' || peek() == 'L') {
+                advance();
+                addToken(TK_LNUMBER, src.substr(start, current - start - 1));
             } else {
                 addToken(TK_NUMBER, src.substr(start, current - start));
             }

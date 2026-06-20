@@ -1,0 +1,10 @@
+native fn print_int(n: i32) => void;
+native fn println(s : String) => void;
+
+fn main() => i32 {
+    let x : i64 = 1000000000000l;
+    let y : i32 = (i32) (x / 1000000000l);
+    print_int(y);
+    println("");
+    return 0;
+}

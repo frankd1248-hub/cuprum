@@ -295,22 +295,22 @@ void IRGen::visit(CallExpr& expr) {
 
 void IRGen::visit(CastExpr& cast) {
     cast.expr->accept(*this);
-
     Type from = cast.expr->resolvedType;
     Type to   = cast.targetType;
 
     if (from == to) return;
 
+    IRValue src = lastValue;
+    src.type = from;
+
     IRValue dest = newTemp();
     IROp op;
 
-    if (to == Type::Int32t && from == Type::Chart) return;
-
-    if      (to == Type::Boolt)    op = IROp::ToBool;
+    if (to == Type::Boolt)     op = IROp::ToBool;
     else if (to == Type::Float32t) op = IROp::ToFloat;
-    else if (to == Type::Int32t)   op = IROp::ToInt;
+    else if (to == Type::Int32t || to == Type::Int64t) op = IROp::ToInt;
 
-    emit(IRInstruction { op, dest, lastValue, {} });
+    emit({ op, dest, src, {}, "" });
     lastValue = dest;
 }
 
@@ -373,17 +373,20 @@ void IRGen::visit(LiteralExpr& lit) {
             IRValue { .kind=IRValue::Kind::IntConst, .id=-1, .ival = ival },
             {}
         });
+    } else if (std::holds_alternative<int64_t>(lit.value)) {
+        int64_t ival = std::get<int64_t>(lit.value);
+        emit({ IROp::Const, dest,
+            IRValue { .kind=IRValue::Kind::IntConst, .id=-1, .ival=ival },
+            {}, "" });
     } else if (std::holds_alternative<char>(lit.value)) {
         emit({ IROp::Const, dest,
             IRValue { .kind=IRValue::Kind::IntConst, .id=-1, .ival=(int)(unsigned char)std::get<char>(lit.value) },
             {}, "" });
-        lastValue = dest;
     } else if (std::holds_alternative<std::string>(lit.value)) {
         const std::string& val = std::get<std::string>(lit.value);
         std::string lbl = stringLabel(val);
         lastStringLabel = lbl;
         emit({ IROp::StringConst, dest, {}, {}, lbl });
-        lastValue = dest;
     }
 
     lastValue = dest;
