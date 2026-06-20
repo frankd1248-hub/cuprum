@@ -22,6 +22,19 @@ public:
         return offset;
     }
 
+    int allocateArray(int tempId, int count) {
+        int base = nextOffset;
+        offsets[tempId] = base;
+        nextOffset += 8 * count;
+        return base;
+    }
+
+    void allocateAnon() {
+        nextOffset += 8;
+    }
+
+    int nextFree() const { return nextOffset; }
+
     // Returns the rbp offset for a previously allocated temp.
     int offsetOf(int tempId) const {
         return offsets.at(tempId);
@@ -64,6 +77,7 @@ private:
     std::unordered_map<float, std::string> floatLabels;
     std::unordered_map<std::string, std::string> stringLabels;
     std::vector<int> paramTempIds;
+    std::unordered_map<int, int> arrayBases;
 
     std::unordered_map<int, std::string> regMap;
     std::vector<std::string> savedRegs;
@@ -92,6 +106,9 @@ private:
     void emitRet    (const IRInstruction& instr); // return src1
     void emitToFloat(const IRInstruction& instr);
     void emitToInt  (const IRInstruction& instr);
+    void emitArrayAlloc (const IRInstruction&);
+    void emitArrayStore (const IRInstruction&);
+    void emitArrayLoad  (const IRInstruction&);
 
     std::string stackRef (int tempId) const;
     std::string fStackRef(int tempId) const;

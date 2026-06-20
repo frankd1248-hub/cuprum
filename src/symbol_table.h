@@ -6,12 +6,13 @@
 #include "ast.h"
 
 struct Symbol {
-    std::string       name;
-    Type              type;         // return type if function
-    bool              isFunction  = false;
-    bool              isConst     = false;
-    std::vector<Type> paramTypes;   // only if isFunction
-    Token             declToken;
+    std::string name;
+    Type        type;
+    ArrayType   arrayType;
+    bool        isFunction = false;
+    bool        isConst    = false;
+    std::vector<Type> paramTypes;
+    Token       declToken;
 };
 
 class SymbolTable {

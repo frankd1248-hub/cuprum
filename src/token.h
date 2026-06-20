@@ -15,7 +15,7 @@ enum TokenType {
 
     TK_ARROW, // =>
 
-    TK_SEMICOLON, TK_COLON, TK_COMMA,
+    TK_SEMICOLON, TK_COLON, TK_COMMA, TK_DOT,
 
     TK_MINUS, TK_PLUS, TK_STAR, TK_SLASH,
     TK_EQUAL,

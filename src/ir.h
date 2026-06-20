@@ -44,7 +44,13 @@ enum class IROp {
     Mov,          // dest = src1 (copy)
     ToFloat,      // dest = (f32) src1  — i32 → f32 conversion
     ToInt,        // dest = (i32) src1  — f32 → i32 conversion (truncates)
-    ToBool,       
+    ToBool,      
+    ArrayAlloc,   // dest = base ptr of N-element array
+                  // src1 = IntConst element count
+    ArrayStore,   // MEM[dest + src1 * 8] = src2
+                  // dest = base ptr, src1 = index, src2 = value
+    ArrayLoad,    // dest = MEM[src1 + src2 * 8]
+                  // src1 = base ptr, src2 = index 
 };
 
 struct IRInstruction {
@@ -112,6 +118,9 @@ inline std::string getOpString(IROp op) {
         case IROp::ToFloat:     return "float";
         case IROp::ToInt:       return "int";
         case IROp::ToBool:      return "bool";
+        case IROp::ArrayAlloc:  return "alloca";
+        case IROp::ArrayStore:  return "stoa";
+        case IROp::ArrayLoad:   return "loda";
         default:                return "nop";
     }
 }
@@ -211,6 +220,22 @@ inline void printIRProgram(const IRProgram& program) {
                     printf("%s <- %s", 
                         stringIRValue(inst.dest).c_str(),
                         stringIRValue(inst.src1).c_str());
+                    break;
+                case IROp::ArrayAlloc:
+                    printf("%s <- ptr[%d]",
+                        stringIRValue(inst.dest).c_str(), inst.src1.ival);
+                    break;
+                case IROp::ArrayStore:
+                    printf("%s[%s] <- %s",
+                        stringIRValue(inst.dest).c_str(),
+                        stringIRValue(inst.src1).c_str(),
+                        stringIRValue(inst.src2).c_str());
+                    break;
+                case IROp::ArrayLoad:
+                    printf("%s <- %s[%s]",
+                        stringIRValue(inst.dest).c_str(),
+                        stringIRValue(inst.src1).c_str(),
+                        stringIRValue(inst.src2).c_str());
                     break;
             }
 

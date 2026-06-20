@@ -24,11 +24,14 @@ public:
     void visit(ReturnStmt& node)   override;
     void visit(WhileStmt& node)    override; 
 
+    void visit(ArrayLiteral& node) override;
     void visit(AssignExpr& node)   override;
     void visit(BinaryExpr& node)   override;
     void visit(CallExpr& node)     override;
     void visit(CastExpr& node)     override;
+    void visit(FieldExpr& node)    override;
     void visit(IndexExpr& node)    override;
+    void visit(IndexAssignExpr&)   override;
     void visit(LiteralExpr& node)  override;
     void visit(UnaryExpr& node)    override;
     void visit(VarExpr& node)      override;

@@ -141,6 +141,28 @@ void IRGen::visit(LetStmt& stmt) {
     for (auto& decl : stmt.declarators) {
         decl.init->accept(*this); // lastValue = init result
 
+
+        if (decl.type == Type::Arrayt) {
+            auto* arrLit = dynamic_cast<ArrayLiteral*>(decl.init);
+
+            IRValue base = newTemp();
+            varTemps[decl.name.lexeme]     = base.id;
+            varArrayInfo[decl.name.lexeme] = { decl.arrayType.elementType,
+                                            decl.arrayType.size };
+
+            emit({ IROp::ArrayAlloc, base,
+                IRValue { .kind=IRValue::Kind::IntConst, .id=-1, .ival=decl.arrayType.size },
+                {}, "" });
+
+            for (int i = 0; i < (int)arrLit->elements.size(); i++) {
+                arrLit->elements[i]->accept(*this);
+                IRValue val = lastValue;
+                IRValue idx = { .kind=IRValue::Kind::IntConst, .id=-1, .ival=i };
+                emit({ IROp::ArrayStore, base, idx, val, "" });
+            }
+            return; // skip the normal Mov emission
+        }
+
         IRValue dest = newTemp();
         varTemps[decl.name.lexeme] = dest.id;
 
@@ -195,6 +217,21 @@ void IRGen::visit(WhileStmt& stmt) {
     emit({ IROp::Label, {}, {}, {}, endLabel });
 
     loopStack.pop_back();
+}
+
+void IRGen::visit(ArrayLiteral& expr) {
+    IRValue base = newTemp();
+    emit({ IROp::ArrayAlloc, base,
+           IRValue { .kind=IRValue::Kind::IntConst, .id=-1,
+                     .ival=(int)expr.elements.size() },
+           {}, "" });
+    for (int i = 0; i < (int)expr.elements.size(); i++) {
+        expr.elements[i]->accept(*this);
+        IRValue val = lastValue;
+        IRValue idx = { .kind=IRValue::Kind::IntConst, .id=-1, .ival=i };
+        emit({ IROp::ArrayStore, base, idx, val, "" });
+    }
+    lastValue = base;
 }
 
 void IRGen::visit(AssignExpr& expr) {
@@ -277,16 +314,43 @@ void IRGen::visit(CastExpr& cast) {
     lastValue = dest;
 }
 
+void IRGen::visit(FieldExpr& expr) {
+    if (expr.field.lexeme == "len") {
+        auto* var = dynamic_cast<VarExpr*>(expr.object);
+        int size = varArrayInfo.at(var->name.lexeme).size;
+        IRValue dest = newTemp();
+        emit({ IROp::Const, dest,
+               IRValue { .kind=IRValue::Kind::IntConst, .id=-1, .ival=size },
+               {}, "" });
+        lastValue = dest;
+    }
+}
+
 void IRGen::visit(IndexExpr& expr) {
     expr.object->accept(*this);
-    IRValue strPtr = lastValue;
-
+    IRValue base = lastValue;
     expr.index->accept(*this);
     IRValue idx = lastValue;
 
     IRValue dest = newTemp();
-    emit({ IROp::Index, dest, strPtr, idx, "" });
+    if (expr.elemType == Type::Chart) {
+        emit({ IROp::Index, dest, base, idx, "" });
+    } else {
+        emit({ IROp::ArrayLoad, dest, base, idx, "" });
+    }
     lastValue = dest;
+}
+
+void IRGen::visit(IndexAssignExpr& expr) {
+    expr.object->accept(*this);
+    IRValue base = lastValue;
+    expr.index->accept(*this);
+    IRValue idx = lastValue;
+    expr.value->accept(*this);
+    IRValue val = lastValue;
+
+    emit({ IROp::ArrayStore, base, idx, val, "" });
+    lastValue = val;
 }
 
 void IRGen::visit(LiteralExpr& lit) {

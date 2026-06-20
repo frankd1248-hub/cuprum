@@ -11,6 +11,11 @@ struct LoopLabels {
     std::string endLabel;  // break jumps here
 };
 
+struct ArrayInfo {
+    Type elementType;
+    int  size;
+};
+
 class IRGen : public ASTVisitor {
 public:
     IRGen(SymbolTable* table) : table(table) { }
@@ -28,11 +33,14 @@ public:
     void visit(ReturnStmt&)   override;
     void visit(WhileStmt&)    override;
 
+    void visit(ArrayLiteral&) override;
     void visit(AssignExpr&)   override;
     void visit(BinaryExpr&)   override;
     void visit(CallExpr&)     override;
     void visit(CastExpr&)     override;
+    void visit(FieldExpr&)    override;
     void visit(IndexExpr&)    override;
+    void visit(IndexAssignExpr&) override;
     void visit(LiteralExpr&)  override;
     void visit(UnaryExpr&)    override;
     void visit(VarExpr&)      override;
@@ -55,6 +63,7 @@ private:
     std::unordered_map<std::string, int> varTemps;
     std::unordered_map<std::string, std::string> stringLabels;
     std::vector<LoopLabels> loopStack = {};
+    std::unordered_map<std::string, ArrayInfo> varArrayInfo;
 
     IRValue newTemp();  // returns IRValue{Temp, tempCount_++}
     std::string newLabel(const std::string& prefix);

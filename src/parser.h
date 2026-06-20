@@ -84,6 +84,8 @@ public:
     Type parseTypeKeyword();
     Type parseTypeKeyword_prev();
 
+    std::pair<Type, ArrayType> parseTypeAnnotation();
+
     ErrorReporter& err;
 
 private:

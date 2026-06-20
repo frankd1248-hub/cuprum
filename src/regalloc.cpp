@@ -16,11 +16,44 @@ std::vector<LiveInterval> RegAlloc::computeIntervals(const IRFunction& fn) {
 
     for (int i = 0; i < (int)fn.body.size(); i++) {
         const IRInstruction& instr = fn.body[i];
-        touch(instr.dest, i, true);
-        touch(instr.src1, i, false);
-        touch(instr.src2, i, false);
+
+        if (instr.op == IROp::ArrayStore) {
+            touch(instr.dest, i, false); // base ptr — use
+            touch(instr.src1, i, false); // index   — use
+            touch(instr.src2, i, false); // value   — use
+        } else {
+            touch(instr.dest, i, true);  // normal definition
+            touch(instr.src1, i, false);
+            touch(instr.src2, i, false);
+        }
+
         for (const IRValue& arg : instr.args)
             touch(arg, i, false);
+    }
+
+    // Extend live intervals across loop back edges.
+    // For each back edge (a jump to a label earlier in the instruction list),
+    // any temp live anywhere inside the loop must stay live for the whole loop.
+    std::unordered_map<std::string, int> labelIdx;
+    for (int i = 0; i < (int)fn.body.size(); i++)
+        if (fn.body[i].op == IROp::Label)
+            labelIdx[fn.body[i].label] = i;
+
+    for (int i = 0; i < (int)fn.body.size(); i++) {
+        const IRInstruction& instr = fn.body[i];
+        if (instr.op == IROp::Jump || instr.op == IROp::JumpIf) {
+            if (labelIdx.count(instr.label)) {
+                int loopStart = labelIdx[instr.label];
+                int loopEnd   = i;
+                if (loopStart < loopEnd) {
+                    // back edge found — extend all intervals overlapping this loop
+                    for (auto& [id, iv] : intervals) {
+                        if (iv.start <= loopEnd && iv.end >= loopStart)
+                            iv.end = std::max(iv.end, loopEnd);
+                    }
+                }
+            }
+        }
     }
 
     std::vector<LiveInterval> result;
@@ -39,7 +72,7 @@ std::unordered_map<int, std::string> RegAlloc::linearScan(std::vector<LiveInterv
     std::unordered_map<int, std::string> regMap;
     std::vector<std::string> pool = {
         "r10", "r11", "r12", "r13", "r14", "r15"
-    }; // Scratch registers
+    };
 
     static const std::vector<std::string> callerSaved = { "r10", "r11" };
     static const std::vector<std::string> calleeSaved = { "r12", "r13", "r14", "r15" };
@@ -49,7 +82,7 @@ std::unordered_map<int, std::string> RegAlloc::linearScan(std::vector<LiveInterv
             if (fn.body[i].op == IROp::Call) return true;
         return false;
     };
-    
+
     std::vector<std::string> free = pool;
 
     struct ActiveEntry { int end; int tempId; std::string reg; };
@@ -68,7 +101,6 @@ std::unordered_map<int, std::string> RegAlloc::linearScan(std::vector<LiveInterv
             active.end());
 
         if (free.empty()) {
-            
             auto it = std::max_element(active.begin(), active.end(),
                 [](const ActiveEntry& a, const ActiveEntry& b) {
                     return a.end < b.end;
@@ -76,11 +108,11 @@ std::unordered_map<int, std::string> RegAlloc::linearScan(std::vector<LiveInterv
 
             if (it != active.end() && it->end > iv.end) {
                 regMap[iv.tempId] = it->reg;
-                regMap.erase(it->tempId); // spill it
+                regMap.erase(it->tempId);
                 active.erase(it);
                 active.push_back({ iv.end, iv.tempId, regMap[iv.tempId] });
             }
-            
+
         } else {
             bool callSpanning = spansCall(iv);
 
@@ -103,9 +135,7 @@ std::unordered_map<int, std::string> RegAlloc::linearScan(std::vector<LiveInterv
                 if (found) break;
             }
 
-            if (!found) {
-                continue;
-            }
+            if (!found) continue;
 
             regMap[iv.tempId] = reg;
             active.push_back({ iv.end, iv.tempId, reg });

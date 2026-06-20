@@ -109,11 +109,18 @@ void CodeGen::emitFunction(const IRFunction& fn) {
     regMap = regAlloc.allocate(fn);
 
     for (const IRInstruction& instr : fn.body) {
-        if (instr.dest.kind == IRValue::Kind::Temp && !regMap.contains(instr.dest.id))
-            frame.allocate(instr.dest.id);
-
-        if (instr.op == IROp::Param)
-            paramTempIds.push_back(instr.dest.id);
+        if (instr.op == IROp::ArrayAlloc) {
+            frame.allocate(instr.dest.id);           // pointer slot
+            int dataBase = frame.nextFree();         // where data starts
+            for (int i = 0; i < instr.src1.ival; i++)
+                frame.allocateAnon();                // reserve data slots
+            arrayBases[instr.dest.id] = dataBase;
+        } else {
+            if (instr.dest.kind == IRValue::Kind::Temp && !regMap.contains(instr.dest.id))
+                frame.allocate(instr.dest.id);
+            if (instr.op == IROp::Param)
+                paramTempIds.push_back(instr.dest.id);
+        }
 
         for (const IRValue& arg : instr.args) {
             if (arg.kind == IRValue::Kind::Temp && !regMap.contains(arg.id) && !frame.hasSlot(arg.id))
@@ -210,7 +217,30 @@ void CodeGen::emitInstruction(const IRInstruction& instr) {
             break;
         case IROp::ToFloat: emitToFloat(instr); break;
         case IROp::ToInt:   emitToInt(instr); break;
+        case IROp::ArrayAlloc: emitArrayAlloc(instr); break;
+        case IROp::ArrayStore: emitArrayStore(instr); break;
+        case IROp::ArrayLoad:  emitArrayLoad(instr);  break;
     }
+}
+
+void CodeGen::emitArrayAlloc(const IRInstruction& instr) {
+    int dataBase = arrayBases[instr.dest.id];
+    emit("lea\trax, [rbp-" + std::to_string(dataBase) + "]");
+    emit("mov\t" + resolve(instr.dest) + ", rax");
+}
+
+void CodeGen::emitArrayStore(const IRInstruction& instr) {
+    emit("mov\trax, " + resolve(instr.dest));  // base ptr
+    emit("mov\trcx, " + resolve(instr.src1));  // index
+    emit("mov\trdx, " + resolve(instr.src2));  // value
+    emit("mov\tQWORD PTR [rax + rcx*8], rdx");
+}
+
+void CodeGen::emitArrayLoad(const IRInstruction& instr) {
+    emit("mov\trax, " + resolve(instr.src1));  // base ptr
+    emit("mov\trcx, " + resolve(instr.src2));  // index
+    emit("mov\trax, QWORD PTR [rax + rcx*8]");
+    emit("mov\t" + resolve(instr.dest) + ", rax");
 }
 
 void CodeGen::emitBinop(const IRInstruction& instr) {

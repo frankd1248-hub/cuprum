@@ -10,6 +10,18 @@ struct ParseRule {
 
 static Precedence getPrecedence(TokenType type);
 
+static Expr* arrayLit(Parser& p, bool canAssign) {
+    auto* lit = new ArrayLiteral();
+    lit->bracket = p.previous();
+    if (!p.check(TK_RIGHT_BRACKET)) {
+        do {
+            lit->elements.push_back(p.expression(PREC_ASSIGNMENT));
+        } while (p.match(TK_COMMA));
+    }
+    p.consume(TK_RIGHT_BRACKET, "Expect ']' after array literal.");
+    return lit;
+}
+
 static Expr* assign(Parser& p, bool canAssign) {
     VarExpr* target = dynamic_cast<VarExpr*>(p.previousExpr());
 
@@ -67,6 +79,14 @@ static Expr* charLit(Parser& p, bool canAssign) {
     return lit;
 }
 
+static Expr* dot(Parser& p, bool canAssign) {
+    p.consume(TK_IDENTIFIER, "Expect field name after '.'.");
+    auto* expr   = new FieldExpr();
+    expr->object = p.previousExpr();
+    expr->field  = p.previous();
+    return expr;
+}
+
 static Expr* floatLit(Parser& parser, bool canAssign) {
     LiteralExpr* literal = new LiteralExpr();
     literal->value = std::stof(parser.previous().lexeme);
@@ -74,12 +94,24 @@ static Expr* floatLit(Parser& parser, bool canAssign) {
 }
 
 static Expr* index(Parser& p, bool canAssign) {
-    IndexExpr* expr = new IndexExpr();
-    expr->object  = p.previousExpr();
-    expr->bracket = p.previous();
-    expr->index   = p.expression(PREC_NONE);
-
+    Expr*  object  = p.previousExpr();
+    Token  bracket = p.previous();
+    Expr*  idx     = p.expression(PREC_NONE);
     p.consume(TK_RIGHT_BRACKET, "Expect ']' after index.");
+
+    if (canAssign && p.match(TK_EQUAL)) {
+        IndexAssignExpr* assign    = new IndexAssignExpr();
+        assign->object  = object;
+        assign->index   = idx;
+        assign->bracket = bracket;
+        assign->value   = p.expression(PREC_ASSIGNMENT);
+        return assign;
+    }
+
+    IndexExpr* expr    = new IndexExpr();
+    expr->object  = object;
+    expr->index   = idx;
+    expr->bracket = bracket;
     return expr;
 }
 
@@ -138,7 +170,7 @@ static ParseRule rules[] = {
     { nullptr,  nullptr, PREC_NONE       }, // TK_EOF
     { lparen,   call,    PREC_CALL       }, // TK_LEFT_PAREN
     { nullptr,  nullptr, PREC_NONE       }, // TK_RIGHT_PAREN
-    { nullptr,  index,   PREC_CALL       }, // TK_LEFT_BRACKET
+    { arrayLit, index,   PREC_CALL       }, // TK_LEFT_BRACKET
     { nullptr,  nullptr, PREC_NONE       }, // TK_RIGHT_BRACKET
     { nullptr,  nullptr, PREC_NONE       }, // TK_LEFT_BRACE
     { nullptr,  nullptr, PREC_NONE       }, // TK_RIGHT_BRACE
@@ -146,6 +178,7 @@ static ParseRule rules[] = {
     { nullptr,  nullptr, PREC_NONE       }, // TK_SEMICOLON
     { nullptr,  nullptr, PREC_NONE       }, // TK_COLON
     { nullptr,  nullptr, PREC_NONE       }, // TK_COMMA
+    { nullptr,  dot,     PREC_CALL       }, // TK_DOT
     { unary,    binary,  PREC_TERM       }, // TK_MINUS
     { nullptr,  binary,  PREC_TERM       }, // TK_PLUS
     { nullptr,  binary,  PREC_FACTOR     }, // TK_STAR
@@ -235,6 +268,18 @@ Type Parser::parseTypeKeyword_prev() {
     }
 }
 
+std::pair<Type, ArrayType> Parser::parseTypeAnnotation() {
+    if (match(TK_LEFT_BRACKET)) {
+        Type elem = parseTypeKeyword();
+        consume(TK_SEMICOLON, "Expect ';' in array type.");
+        consume(TK_NUMBER, "Expect array size.");
+        int size = std::stoi(previous().lexeme);
+        consume(TK_RIGHT_BRACKET, "Expect ']' after array type.");
+        return { Type::Arrayt, { elem, size } };
+    }
+    return { parseTypeKeyword(), {} };
+}
+
 BlockStmt* Parser::block() {
     BlockStmt* block_ = new BlockStmt();
 
@@ -298,14 +343,17 @@ FuncDecl* Parser::fnDeclaration() {
             consume(TK_IDENTIFIER, "Expect parameter name.");
             Token paramName = previous();
             consume(TK_COLON, "Expect ':' after parameter name.");
-            Type paramType = parseTypeKeyword();
-            fun->params.push_back({ paramName, paramType });
+            consume(TK_COLON, "Expect ':' after parameter name.");
+            auto [type, arrayType] = parseTypeAnnotation();
+            fun->params.push_back({ paramName, type, arrayType });
         } while (match(TK_COMMA));
     }
     consume(TK_RIGHT_PAREN, "Expect ')' after parameters.");
 
     consume(TK_ARROW, "Expect '=>' before return type.");
-    fun->returnType = parseTypeKeyword();
+    auto [type, arrayType] = parseTypeAnnotation();
+    fun->returnType      = type;
+    fun->returnArrayType = arrayType;
 
     consume(TK_LEFT_BRACE, "Expect '{' before function body.");
     fun->body = block();
@@ -365,7 +413,9 @@ LetStmt* Parser::letStatement(bool consumeSemicolon) {
         decl.name = previous();
 
         consume(TK_COLON, "Expect ':' after variable name.");
-        decl.type = parseTypeKeyword();
+        auto [type, arrayType] = parseTypeAnnotation();
+        decl.type      = type;
+        decl.arrayType = arrayType;
 
         consume(TK_EQUAL, "Expect '=' after type.");
         decl.init = expression(PREC_ASSIGNMENT);

@@ -30,13 +30,14 @@ std::vector<Token> Lexer::tokenize() {
             switch (c) {
                 case '(': addToken(TK_LEFT_PAREN, "("); break;
                 case ')': addToken(TK_RIGHT_PAREN, ")"); break;
-                case '[':  addToken(TK_LEFT_BRACKET,  "["); break;
-                case ']':  addToken(TK_RIGHT_BRACKET, "]"); break;
+                case '[': addToken(TK_LEFT_BRACKET,  "["); break;
+                case ']': addToken(TK_RIGHT_BRACKET, "]"); break;
                 case '{': addToken(TK_LEFT_BRACE, "{"); break;
                 case '}': addToken(TK_RIGHT_BRACE, "}"); break;
                 case ';': addToken(TK_SEMICOLON, ";"); break;
                 case ':': addToken(TK_COLON, ":"); break;
                 case ',': addToken(TK_COMMA, ","); break;
+                case '.': addToken(TK_DOT, "."); break;
                 case '-': addToken(TK_MINUS, "-"); break;
                 case '+': addToken(TK_PLUS, "+"); break;
                 case '*': addToken(TK_STAR, "*"); break;

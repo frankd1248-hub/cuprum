@@ -12,6 +12,7 @@ std::unordered_map<TokenType, std::string> tokenTypeLookup = {
     { TK_SEMICOLON,     "TK_SEMICOLON" },
     { TK_COLON,         "TK_COLON" },
     { TK_COMMA,         "TK_COMMA" },
+    { TK_DOT,           "TK_DOT" },
     { TK_MINUS,         "TK_MINUS" },
     { TK_PLUS,          "TK_PLUS" },
     { TK_STAR,          "TK_STAR" },

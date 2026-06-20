@@ -7,6 +7,7 @@
 #include "token.h"
 
 enum class Type {
+    Arrayt,
     Boolt,
     Int32t,
     Float32t,
@@ -16,8 +17,14 @@ enum class Type {
     Nullt,
 };
 
+struct ArrayType {
+    Type elementType = Type::Nullt;
+    int  size        = 0;
+};
+
 inline std::string TypetoString(Type t) {
     switch(t) {
+        case Type::Arrayt:   return "array";
         case Type::Boolt:    return "bool";
         case Type::Chart:    return "char";
         case Type::Int32t:   return "i32";
@@ -29,11 +36,14 @@ inline std::string TypetoString(Type t) {
     }
 }
 
+class ArrayLiteral;
 class AssignExpr;
 class BinaryExpr;
 class CallExpr;
 class CastExpr;
+class FieldExpr;
 class IndexExpr;
+class IndexAssignExpr;
 class LiteralExpr;
 class UnaryExpr;
 class VarExpr;
@@ -53,11 +63,14 @@ class WhileStmt;
 class ASTVisitor {
 public:
     virtual ~ASTVisitor() = default;
+    virtual void visit(ArrayLiteral&) = 0;
     virtual void visit(AssignExpr&)   = 0;
     virtual void visit(BinaryExpr&)   = 0;
     virtual void visit(CallExpr&)     = 0;
     virtual void visit(CastExpr&)     = 0;
+    virtual void visit(FieldExpr&)    = 0;
     virtual void visit(IndexExpr&)    = 0;
+    virtual void visit(IndexAssignExpr&) = 0;
     virtual void visit(LiteralExpr&)  = 0;
     virtual void visit(UnaryExpr&)    = 0;
     virtual void visit(VarExpr&)      = 0;
@@ -85,6 +98,17 @@ public:
 class Expr : public ASTNode {
 public:
     Type resolvedType;
+};
+
+class ArrayLiteral : public Expr {
+public:
+    void accept(ASTVisitor& v) override { 
+        v.visit(*this); 
+    }
+
+    std::vector<Expr*> elements;
+    ArrayType          arrayType; // filled by sema
+    Token              bracket;
 };
 
 class AssignExpr : public Expr {
@@ -127,6 +151,16 @@ public:
     Token  token;
 };
 
+class FieldExpr : public Expr {
+public:
+    void accept(ASTVisitor& v) override { 
+        v.visit(*this); 
+    }
+
+    Expr*  object;
+    Token  field;
+};
+
 class IndexExpr : public Expr {
 public:
     void accept(ASTVisitor& v) override { 
@@ -135,6 +169,19 @@ public:
 
     Expr*  object;
     Expr*  index;
+    Token  bracket;
+    Type   elemType = Type::Nullt;
+};
+
+class IndexAssignExpr : public Expr {
+public:
+    void accept(ASTVisitor& v) override { 
+        v.visit(*this); 
+    }
+
+    Expr*  object;
+    Expr*  index;
+    Expr*  value;
     Token  bracket;
 };
 
@@ -207,10 +254,11 @@ public:
 };
 
 struct VarDeclarator {
-    Token   name;
-    Type    type;
-    bool    isConst = false;
-    Expr*   init;
+    Token      name;
+    Type       type;
+    ArrayType  arrayType;  // only used when type == Arrayt
+    bool       isConst = false;
+    Expr*      init;
 };
 
 class ForStmt : public Stmt {
@@ -227,8 +275,9 @@ public:
 };
 
 struct Param {
-    Token name;
-    Type  type;
+    Token     name;
+    Type      type;
+    ArrayType arrayType;
 };
 
 class FuncDecl : public Stmt {
@@ -236,6 +285,7 @@ public:
     void accept(ASTVisitor& v) override { v.visit(*this); }
 
     Type             returnType;
+    ArrayType        returnArrayType;
     Token            name;
     std::vector<Param> params;
     BlockStmt*       body;

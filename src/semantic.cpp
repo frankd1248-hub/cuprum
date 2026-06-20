@@ -113,16 +113,28 @@ void SemanticAnalyzer::visit(LetStmt& stmt) {
     for (auto& decl : stmt.declarators) {
         decl.init->accept(*this);
 
-        if (decl.init->resolvedType != decl.type)
+        if (decl.type == Type::Arrayt) {
+            auto* arrLit = dynamic_cast<ArrayLiteral*>(decl.init);
+            if (!arrLit) {
+                err.report(decl.name, "Array must be initialized with an array literal.");
+            } else if ((int)arrLit->elements.size() != decl.arrayType.size) {
+                err.report(decl.name, "Array literal size does not match declared size.");
+            } else if (arrLit->arrayType.elementType != decl.arrayType.elementType) {
+                err.report(decl.name, "Array element type mismatch.");
+            }
+        }
+
+        if (decl.type != Type::Arrayt && decl.init->resolvedType != decl.type)
             err.report(decl.name, 
                 "Initializer type does not match declared type: initializer is of type " 
                 + TypetoString(decl.init->resolvedType) + " and declared is "
                 + TypetoString(decl.type));
 
         Symbol sym;
-        sym.name    = decl.name.lexeme;
-        sym.type    = decl.type;
-        sym.isConst = decl.isConst;
+        sym.name      = decl.name.lexeme;
+        sym.type      = decl.type;
+        sym.arrayType = decl.arrayType;
+        sym.isConst   = decl.isConst;
         sym.declToken = decl.name;
 
         if (!symbols.define(sym))
@@ -146,6 +158,24 @@ void SemanticAnalyzer::visit(WhileStmt& stmt) {
     loopDepth++;
     stmt.body->accept(*this);
     loopDepth--;
+}
+
+void SemanticAnalyzer::visit(ArrayLiteral& expr) {
+    if (expr.elements.empty()) {
+        err.report(expr.bracket, "Array literal cannot be empty.");
+        expr.resolvedType = Type::Arrayt;
+        return;
+    }
+    expr.elements[0]->accept(*this);
+    Type elemType = expr.elements[0]->resolvedType;
+
+    for (size_t i = 1; i < expr.elements.size(); i++) {
+        expr.elements[i]->accept(*this);
+        if (expr.elements[i]->resolvedType != elemType)
+            err.report(expr.bracket, "Array elements must all have the same type.");
+    }
+    expr.resolvedType = Type::Arrayt;
+    expr.arrayType    = { elemType, (int)expr.elements.size() };
 }
 
 void SemanticAnalyzer::visit(AssignExpr& expr) {
@@ -267,16 +297,54 @@ void SemanticAnalyzer::visit(CastExpr& cast) {
     cast.resolvedType = to;
 }
 
+void SemanticAnalyzer::visit(FieldExpr& expr) {
+    expr.object->accept(*this);
+
+    if (expr.field.lexeme == "len") {
+        if (expr.object->resolvedType != Type::Arrayt &&
+            expr.object->resolvedType != Type::Stringt)
+            err.report(expr.field, "'len' only valid on arrays and Strings.");
+        expr.resolvedType = Type::Int32t;
+    } else {
+        err.report(expr.field, "Unknown field '" + expr.field.lexeme + "'.");
+        expr.resolvedType = Type::Nullt;
+    }
+}
+
 void SemanticAnalyzer::visit(IndexExpr& expr) {
     expr.object->accept(*this);
     expr.index->accept(*this);
 
-    if (expr.object->resolvedType != Type::Stringt)
-        err.report(expr.bracket, "Index operator only valid on String.");
     if (expr.index->resolvedType != Type::Int32t)
-        err.report(expr.bracket, "String index must be i32.");
+        err.report(expr.bracket, "Index must be i32.");
 
-    expr.resolvedType = Type::Chart;
+    if (expr.object->resolvedType == Type::Stringt) {
+        expr.elemType     = Type::Chart;
+        expr.resolvedType = Type::Chart;
+    } else if (expr.object->resolvedType == Type::Arrayt) {
+        if (auto* var = dynamic_cast<VarExpr*>(expr.object)) {
+            Symbol* sym = symbols.lookup(var->name.lexeme);
+            if (sym) {
+                expr.elemType     = sym->arrayType.elementType;
+                expr.resolvedType = sym->arrayType.elementType;
+            }
+        }
+    } else {
+        err.report(expr.bracket, "Index operator only valid on String or array.");
+    }
+}
+
+void SemanticAnalyzer::visit(IndexAssignExpr& expr) {
+    expr.object->accept(*this);
+    expr.index->accept(*this);
+    expr.value->accept(*this);
+
+    if (expr.object->resolvedType != Type::Arrayt)
+        err.report(expr.bracket, "Index assignment only valid on arrays.");
+    if (expr.index->resolvedType != Type::Int32t)
+        err.report(expr.bracket, "Array index must be i32.");
+
+    expr.resolvedType = expr.value->resolvedType;
 }
 
 void SemanticAnalyzer::visit(LiteralExpr& lit) {
