@@ -1,9 +1,9 @@
 #ifndef cuprum_regalloc_h
 #define cuprum_regalloc_h
 
+#include "common.h"
 #include "ir.h"
 #include <unordered_map>
-#include <string>
 
 struct LiveInterval {
     int tempId;

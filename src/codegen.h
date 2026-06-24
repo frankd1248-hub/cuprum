@@ -1,7 +1,6 @@
 #ifndef cuprum_codegen_h
 #define cuprum_codegen_h
 
-#include <fstream>
 #include <unordered_map>
 #include "common.h"
 #include "ir.h"

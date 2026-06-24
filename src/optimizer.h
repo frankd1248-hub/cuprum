@@ -1,7 +1,7 @@
 #ifndef cuprum_optimizer_h
 #define cuprum_optimizer_h
 
-#include <vector>
+#include "common.h"
 #include "ir.h"
 
 class Optimizer {
